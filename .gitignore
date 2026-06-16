@@ -1,0 +1,74 @@
+# Build output
+bin/
+obj/
+dist/
+publish/
+artifacts/
+releases/**
+!releases/.gitkeep
+*.zip
+*.msi
+*.exe
+*.nupkg
+*.snupkg
+
+# Runtime/user data
+Data/
+data/
+server-data/
+servers/
+Servers/
+backups/
+Backups/
+logs/
+Logs/
+mods/
+Mods/
+plugins/
+Plugins/
+temp/
+tmp/
+cache/
+Cache/
+
+# SteamCMD and downloaded game server files
+tools/SteamCMD/
+Tools/SteamCMD/
+steamcmd/
+steamapps/
+*.acf
+
+# Local/private configuration
+*.user
+*.suo
+*.rsuser
+*.secrets.json
+appsettings.Local.json
+appsettings.Production.json
+**/Profiles/
+**/Settings/user*.json
+
+# Logs, dumps, diagnostics
+*.log
+*.trace
+*.dmp
+*.etl
+
+# IDE/editor
+.vs/
+.vscode/*.user
+.idea/
+
+# Claude Code local settings
+.claude/
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+# Keep examples and templates
+!examples/
+!docs/
+!assets/
+!**/*.example.json
+!**/*.template.json

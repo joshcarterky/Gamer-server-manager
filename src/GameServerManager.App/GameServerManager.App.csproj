@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\AppIcon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GameServerManager.Core\GameServerManager.Core.csproj" />
+    <ProjectReference Include="..\GameServerManager.GameProviders\GameServerManager.GameProviders.csproj" />
+    <ProjectReference Include="..\GameServerManager.Services\GameServerManager.Services.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,371 @@
+<UserControl x:Class="GameServerManager.App.Views.CurseForgeModBrowserView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#0B1925">
+    <UserControl.Resources>
+        <Style x:Key="BrowserPanel" TargetType="Border">
+            <Setter Property="Background" Value="#AA132236"/>
+            <Setter Property="BorderBrush" Value="#3E6680"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+
+        <Style x:Key="BrowserButton" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="#243A50"/>
+            <Setter Property="BorderBrush" Value="#4B6F8A"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#2E4E6A"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#1A3548"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource BrowserButton}">
+            <Setter Property="Background" Value="#1E6B47"/>
+            <Setter Property="BorderBrush" Value="#2A9B67"/>
+        </Style>
+
+        <Style x:Key="SortButton" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="#A8B7C8"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="#3E5566"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Background" Value="#183A5B"/>
+                                <Setter Property="BorderBrush" Value="#68C7FF"/>
+                                <Setter Property="Foreground" Value="#68C7FF"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#182A3A"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ModCard" TargetType="Border">
+            <Setter Property="Background" Value="#0E1D2C"/>
+            <Setter Property="BorderBrush" Value="#2A4055"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+
+        <Style x:Key="SelectedModCard" TargetType="Border" BasedOn="{StaticResource ModCard}">
+            <Setter Property="Background" Value="#0E2A1A"/>
+            <Setter Property="BorderBrush" Value="#2A9B67"/>
+        </Style>
+
+        <Style x:Key="SmallLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#6A8AAA"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+
+        <Style x:Key="MetaText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#7A9AB8"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+
+        <Style x:Key="SearchBox" TargetType="TextBox">
+            <Setter Property="Foreground" Value="#EAF2FA"/>
+            <Setter Property="Background" Value="#0D1B28"/>
+            <Setter Property="BorderBrush" Value="#3E6680"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="CaretBrush" Value="#68C7FF"/>
+            <Setter Property="SelectionBrush" Value="#2255AA"/>
+        </Style>
+
+        <!-- Card DataTemplate — used in the results ItemsControl -->
+        <DataTemplate x:Key="ModResultTemplate">
+            <Border Cursor="Hand" Margin="0,0,0,6" CornerRadius="6" Padding="12"
+                    BorderThickness="1">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="#0E1D2C"/>
+                        <Setter Property="BorderBrush" Value="#2A4055"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                <Setter Property="Background" Value="#0E2A1A"/>
+                                <Setter Property="BorderBrush" Value="#2A9B67"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Border.InputBindings>
+                    <MouseBinding MouseAction="LeftClick"
+                                  Command="{Binding DataContext.ToggleResultCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  CommandParameter="{Binding}"/>
+                </Border.InputBindings>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="48"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Icon -->
+                    <Border Grid.Column="0" Width="40" Height="40" CornerRadius="4"
+                            Background="#0A1520" VerticalAlignment="Top" Margin="0,0,10,0">
+                        <Image Source="{Binding IconUrl}" Stretch="UniformToFill" VerticalAlignment="Center"/>
+                    </Border>
+
+                    <!-- Info -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Top">
+                        <TextBlock Text="{Binding Name}" Foreground="#EAF2FA" FontSize="13" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Author}" Foreground="#7AACCC" FontSize="11" Margin="0,2,0,0"/>
+                        <TextBlock Text="{Binding Summary}" Foreground="#8AA8C0" FontSize="11"
+                                   TextTrimming="CharacterEllipsis" MaxHeight="32"
+                                   TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                            <TextBlock Text="{Binding DownloadCountText}" Style="{StaticResource MetaText}"/>
+                            <TextBlock Text=" · " Style="{StaticResource MetaText}"/>
+                            <TextBlock Text="{Binding UpdatedText}" Style="{StaticResource MetaText}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Checkmark when selected -->
+                    <Border Grid.Column="2" Width="22" Height="22" CornerRadius="11"
+                            VerticalAlignment="Top" Margin="8,0,0,0"
+                            Visibility="{Binding IsSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Border.Background>
+                            <SolidColorBrush Color="#2A9B67"/>
+                        </Border.Background>
+                        <TextBlock Text="✓" Foreground="White" FontSize="12"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <!-- Selected mod item template (in the cart) -->
+        <DataTemplate x:Key="SelectedModTemplate">
+            <Border Margin="0,0,0,4" Background="#0C1F16" BorderBrush="#2A9B67"
+                    BorderThickness="1" CornerRadius="4" Padding="8,6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Name}" Foreground="#C8F0D8" FontSize="12" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Author}" Foreground="#6AAA88" FontSize="10"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="✕" Command="{Binding RemoveCommand}"
+                            Foreground="#6AAA88" Background="Transparent" BorderThickness="0"
+                            Padding="4,2" VerticalAlignment="Center" Cursor="Hand"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="260"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ── Left: search + results ────────────────────────────── -->
+        <DockPanel Grid.Column="0" Margin="0,0,8,0">
+
+            <!-- Search bar -->
+            <Border DockPanel.Dock="Top" Style="{StaticResource BrowserPanel}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Search input row -->
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" Style="{StaticResource SearchBox}"
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Tag="Search ARK: Survival Ascended mods…">
+                            <TextBox.InputBindings>
+                                <KeyBinding Key="Return" Command="{Binding SearchCommand}"/>
+                            </TextBox.InputBindings>
+                        </TextBox>
+                        <Button Grid.Column="1" Content="Search" Command="{Binding SearchCommand}"
+                                Style="{StaticResource AccentButton}" Margin="8,0,0,0" MinWidth="80"/>
+                    </Grid>
+
+                    <!-- Sort row -->
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Text="Sort:" Foreground="#6A8AAA" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ToggleButton Content="Popular" IsChecked="{Binding SortIsPopularity, Mode=OneWay}"
+                                      Command="{Binding SortByPopularityCommand}"
+                                      Style="{StaticResource SortButton}" Margin="0,0,4,0"/>
+                        <ToggleButton Content="Updated" IsChecked="{Binding SortIsUpdated, Mode=OneWay}"
+                                      Command="{Binding SortByUpdatedCommand}"
+                                      Style="{StaticResource SortButton}" Margin="0,0,4,0"/>
+                        <ToggleButton Content="Name" IsChecked="{Binding SortIsName, Mode=OneWay}"
+                                      Command="{Binding SortByNameCommand}"
+                                      Style="{StaticResource SortButton}" Margin="0,0,4,0"/>
+                        <ToggleButton Content="Downloads" IsChecked="{Binding SortIsDownloads, Mode=OneWay}"
+                                      Command="{Binding SortByDownloadsCommand}"
+                                      Style="{StaticResource SortButton}"/>
+                        <TextBlock Text="{Binding ResultCountText}" Style="{StaticResource SmallLabel}"
+                                   VerticalAlignment="Center" Margin="16,0,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Results area (with state overlays) -->
+            <Border DockPanel.Dock="Bottom" Style="{StaticResource BrowserPanel}" Padding="0" MinHeight="300">
+                <Grid>
+                    <!-- Idle prompt -->
+                    <TextBlock Text="Search for ARK: Survival Ascended mods above to get started."
+                               Foreground="#5A7A9A" FontSize="13" TextAlignment="Center"
+                               VerticalAlignment="Center" HorizontalAlignment="Center" Margin="20"
+                               Visibility="{Binding IsIdle, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                    <!-- Loading spinner text -->
+                    <TextBlock Text="Loading…" Foreground="#7AACCC" FontSize="13"
+                               VerticalAlignment="Center" HorizontalAlignment="Center"
+                               Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                    <!-- No API key -->
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="20"
+                                Visibility="{Binding NeedsApiKey, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <TextBlock Text="CurseForge API key not configured"
+                                   Foreground="#F7B267" FontSize="14" FontWeight="SemiBold" TextAlignment="Center"/>
+                        <TextBlock Text="{Binding StatusMessage}"
+                                   Foreground="#A8B7C8" FontSize="12" TextAlignment="Center"
+                                   TextWrapping="Wrap" Margin="0,6,0,0"/>
+                    </StackPanel>
+
+                    <!-- Error -->
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="20"
+                                Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <TextBlock Text="Search failed" Foreground="#FF6B6B" FontSize="14"
+                                   FontWeight="SemiBold" TextAlignment="Center"/>
+                        <TextBlock Text="{Binding StatusMessage}"
+                                   Foreground="#A8B7C8" FontSize="12" TextAlignment="Center"
+                                   TextWrapping="Wrap" Margin="0,6,0,0"/>
+                    </StackPanel>
+
+                    <!-- Results list -->
+                    <Grid Visibility="{Binding HasResults, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" Padding="14">
+                            <ItemsControl ItemsSource="{Binding Results}"
+                                          ItemTemplate="{StaticResource ModResultTemplate}"/>
+                        </ScrollViewer>
+
+                        <!-- Empty state inside results -->
+                        <TextBlock Grid.Row="0" Text="{Binding StatusMessage}"
+                                   Foreground="#5A7A9A" FontSize="13" TextAlignment="Center"
+                                   VerticalAlignment="Center" Margin="20"
+                                   Visibility="{Binding StatusMessage, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                        <!-- Load more -->
+                        <Border Grid.Row="1" Padding="14,0,14,10"
+                                Visibility="{Binding CanLoadMore, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Button Content="Load More Results" Command="{Binding LoadMoreCommand}"
+                                    Style="{StaticResource BrowserButton}" HorizontalAlignment="Center"/>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+        </DockPanel>
+
+        <!-- ── Right: selection cart ──────────────────────────────── -->
+        <Border Grid.Column="1" Style="{StaticResource BrowserPanel}" VerticalAlignment="Stretch">
+            <DockPanel>
+                <!-- Header -->
+                <TextBlock DockPanel.Dock="Top" Text="Selected Mods"
+                           Foreground="#EAF2FA" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8"/>
+
+                <!-- Count -->
+                <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedCountText}"
+                           Foreground="#7AACCC" FontSize="11" Margin="0,0,0,10"
+                           Visibility="{Binding HasSelectedMods, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                <!-- Empty hint -->
+                <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap"
+                           Text="Click a mod in the results list to select it."
+                           Foreground="#4A6A8A" FontSize="11" Margin="0,0,0,10"
+                           Visibility="{Binding HasSelectedMods, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasSelectedMods}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+
+                <!-- Action buttons -->
+                <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                    <Button Content="Add to Server Mod List" Command="{Binding AddSelectedCommand}"
+                            Style="{StaticResource AccentButton}" Margin="0,0,0,4"
+                            IsEnabled="{Binding HasSelectedMods}"/>
+                    <Button Content="Clear Selection" Command="{Binding ClearSelectionCommand}"
+                            Style="{StaticResource BrowserButton}"
+                            IsEnabled="{Binding HasSelectedMods}"/>
+                </StackPanel>
+
+                <!-- Selected items list -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding SelectedMods}"
+                                  ItemTemplate="{StaticResource SelectedModTemplate}"/>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>
