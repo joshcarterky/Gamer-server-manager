@@ -45,6 +45,7 @@ public class SettingsViewModel : BaseViewModel
     private readonly UpdateHistoryService _updateHistoryService;
     private readonly GitHubAssetDownloadService _downloadService;
     private CancellationTokenSource? _autoSaveCancellation;
+    private CancellationTokenSource? _downloadCancellation;
     private AppSettings _settings = new();
     private SettingsCategoryViewModel? _selectedCategory;
     private string _statusMessage = "Settings loaded.";
@@ -52,12 +53,12 @@ public class SettingsViewModel : BaseViewModel
     private string _integrationsStatus = string.Empty;
     private UpdateCheckResult _lastUpdateResult = UpdateCheckResult.NoUpdate(AppVersion.Current, "Stable");
     private int _downloadProgress;
-    private string _downloadDetail = "0 MB / 0 MB";
+    private string _downloadDetail = string.Empty;
     private string _updateStatus = "No update check has run yet.";
     private string _updateHistoryText = "No update history recorded yet.";
     private string? _downloadedUpdatePath;
     private string _diagnosticsStatus = string.Empty;
-    private bool _isCheckingForUpdates;
+    private UpdateState _updateState = UpdateState.Idle;
 
     public SettingsViewModel()
     {
@@ -93,9 +94,16 @@ public class SettingsViewModel : BaseViewModel
         ExportCommand = new RelayCommand(async _ => await ExportAsync());
         ImportCommand = new RelayCommand(async _ => await ImportAsync());
         TestCurseForgeCommand = new RelayCommand(async _ => await TestCurseForgeAsync());
-        CheckForUpdatesCommand = new RelayCommand(async _ => await CheckForUpdatesAsync(manual: true), () => !IsCheckingForUpdates);
-        DownloadUpdateCommand = new RelayCommand(async _ => await DownloadUpdateAsync());
-        InstallUpdateCommand = new RelayCommand(async _ => await InstallUpdateAsync());
+        CheckForUpdatesCommand = new RelayCommand(async _ => await CheckForUpdatesAsync(manual: true),
+            () => _updateState != UpdateState.Checking && _updateState != UpdateState.Downloading && _updateState != UpdateState.Installing);
+        DownloadUpdateCommand = new RelayCommand(async _ => await DownloadUpdateAsync(),
+            () => _updateState == UpdateState.UpdateAvailable);
+        InstallUpdateCommand = new RelayCommand(async _ => await InstallUpdateAsync(),
+            () => _updateState == UpdateState.Downloaded);
+        CancelDownloadCommand = new RelayCommand(_ => CancelDownload(),
+            () => _updateState == UpdateState.Downloading);
+        DownloadAndInstallCommand = new RelayCommand(async _ => await DownloadAndInstallAsync(),
+            () => _updateState == UpdateState.UpdateAvailable);
         SkipUpdateCommand = new RelayCommand(async _ => await SkipUpdateAsync());
         RemindLaterCommand = new RelayCommand(async _ => await RemindLaterAsync());
         ViewReleaseCommand = new RelayCommand(_ => OpenUrl(ReleaseUrl));
@@ -241,6 +249,8 @@ public class SettingsViewModel : BaseViewModel
     public RelayCommand CopyIssueTemplateCommand { get; }
     public RelayCommand OpenUpdateLogsCommand { get; }
     public RelayCommand OpenDownloadsFolderCommand { get; }
+    public RelayCommand CancelDownloadCommand { get; }
+    public RelayCommand DownloadAndInstallCommand { get; }
     public RelayCommand DeveloperForceUpdateCheckCommand { get; }
     public RelayCommand DeveloperTestDownloadProgressCommand { get; }
     public RelayCommand DeveloperTestFailedUpdateCommand { get; }
@@ -344,18 +354,13 @@ public class SettingsViewModel : BaseViewModel
     public string ReleaseUrl => _lastUpdateResult.ReleaseUrl ?? AppVersion.RepositoryUrl;
     public string DownloadSizeText => _lastUpdateResult.DownloadSizeBytes is long bytes ? FormatBytes(bytes) : "Unknown";
     public bool HasUpdateAvailable => _lastUpdateResult.IsUpdateAvailable;
-    public bool IsCheckingForUpdates
-    {
-        get => _isCheckingForUpdates;
-        private set
-        {
-            if (SetProperty(ref _isCheckingForUpdates, value))
-            {
-                OnPropertyChanged(nameof(CheckForUpdatesButtonText));
-                CheckForUpdatesCommand.NotifyCanExecuteChanged();
-            }
-        }
-    }
+    public bool IsCheckingForUpdates => _updateState == UpdateState.Checking;
+    public bool ShowDownloadButton => _updateState == UpdateState.UpdateAvailable;
+    public bool ShowInstallButton => _updateState == UpdateState.Downloaded;
+    public bool ShowCancelButton => _updateState == UpdateState.Downloading;
+    public bool ShowNoInstallerMessage => _updateState == UpdateState.NoInstallerFound;
+    public bool ShowReadyToInstall => _updateState == UpdateState.Downloaded;
+    public bool ShowDownloadProgress => _updateState is UpdateState.Checking or UpdateState.Downloading;
 
     public string CheckForUpdatesButtonText => IsCheckingForUpdates ? "Checking..." : "Check for Updates";
     public int DownloadProgress { get => _downloadProgress; private set => SetProperty(ref _downloadProgress, value); }
@@ -377,6 +382,38 @@ public class SettingsViewModel : BaseViewModel
         }
     }
 
+    private void SetUpdateState(UpdateState state)
+    {
+        _updateState = state;
+        OnPropertyChanged(nameof(IsCheckingForUpdates));
+        OnPropertyChanged(nameof(CheckForUpdatesButtonText));
+        OnPropertyChanged(nameof(ShowDownloadButton));
+        OnPropertyChanged(nameof(ShowInstallButton));
+        OnPropertyChanged(nameof(ShowCancelButton));
+        OnPropertyChanged(nameof(ShowNoInstallerMessage));
+        OnPropertyChanged(nameof(ShowReadyToInstall));
+        OnPropertyChanged(nameof(ShowDownloadProgress));
+        CheckForUpdatesCommand.NotifyCanExecuteChanged();
+        DownloadUpdateCommand.NotifyCanExecuteChanged();
+        InstallUpdateCommand.NotifyCanExecuteChanged();
+        CancelDownloadCommand.NotifyCanExecuteChanged();
+        DownloadAndInstallCommand.NotifyCanExecuteChanged();
+    }
+
+    private void CancelDownload()
+    {
+        _downloadCancellation?.Cancel();
+    }
+
+    private async Task DownloadAndInstallAsync()
+    {
+        await DownloadUpdateAsync();
+        if (_updateState == UpdateState.Downloaded)
+        {
+            await InstallUpdateAsync();
+        }
+    }
+
     private async Task LoadAsync()
     {
         try
@@ -389,6 +426,7 @@ public class SettingsViewModel : BaseViewModel
             StatusMessage = $"Loaded settings from {_settingsService.SettingsPath}";
             RefreshUpdateProperties();
             await LoadUpdateHistoryAsync();
+            _downloadService.CleanOldDownloads();
             if (ShouldAutoCheckForUpdates())
             {
                 _ = CheckForUpdatesAsync(manual: false);
@@ -576,12 +614,12 @@ public class SettingsViewModel : BaseViewModel
 
     private async Task CheckForUpdatesAsync(bool manual)
     {
-        if (IsCheckingForUpdates)
+        if (_updateState is UpdateState.Checking or UpdateState.Downloading or UpdateState.Installing)
         {
             return;
         }
 
-        IsCheckingForUpdates = true;
+        SetUpdateState(UpdateState.Checking);
         UpdateStatus = "Checking for updates...";
         StatusMessage = "Checking for updates...";
         RefreshUpdateProperties();
@@ -591,7 +629,7 @@ public class SettingsViewModel : BaseViewModel
             var repositoryUrl = BuildRepositoryUrl();
             var includeBeta = Settings.IncludeBetaUpdates || string.Equals(Settings.UpdateChannel, "Beta", StringComparison.OrdinalIgnoreCase);
             await _updateLogger.LogAsync(
-                "Check for updates button clicked.",
+                "Check for updates clicked.",
                 $"Current={AppVersion.Current}; Repository={repositoryUrl}; Channel={(includeBeta ? "Beta" : "Stable")}");
 
             _lastUpdateResult = await _releaseService.CheckLatestAsync(
@@ -605,28 +643,34 @@ public class SettingsViewModel : BaseViewModel
 
             if (_lastUpdateResult.ErrorMessage is not null)
             {
+                SetUpdateState(UpdateState.Failed);
                 UpdateStatus = _lastUpdateResult.ErrorMessage;
                 StatusMessage = "Could not check for updates.";
                 await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? AppVersion.Current, "Check", "Failed", _lastUpdateResult.ErrorMessage);
             }
             else if (_lastUpdateResult.IsUpdateAvailable)
             {
-                var hasInstaller = _lastUpdateResult.Assets.Any(asset =>
-                    asset.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
-                    && (asset.Name.Contains("Setup", StringComparison.OrdinalIgnoreCase)
-                        || asset.Name.Contains("Installer", StringComparison.OrdinalIgnoreCase)));
-                UpdateStatus = hasInstaller
-                    ? $"Update available: {_lastUpdateResult.LatestVersion} ({_lastUpdateResult.UpdateType})."
-                    : $"Update available: {_lastUpdateResult.LatestVersion}, but no installer asset was found. Open the GitHub release page.";
+                var hasInstaller = GitHubAssetDownloadService.PickBestWindowsAsset(_lastUpdateResult.Assets) is not null;
+                if (hasInstaller)
+                {
+                    SetUpdateState(UpdateState.UpdateAvailable);
+                    UpdateStatus = $"Update available: {_lastUpdateResult.LatestVersion} ({_lastUpdateResult.UpdateType}). Click Download Update to continue.";
+                }
+                else
+                {
+                    SetUpdateState(UpdateState.NoInstallerFound);
+                    UpdateStatus = $"Update {_lastUpdateResult.LatestVersion} is available, but no installer was found in the release. Open the GitHub release page to download manually.";
+                }
                 StatusMessage = UpdateStatus;
                 await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Check", "Update available", UpdateStatus);
-                if (Settings.AutomaticallyDownloadUpdates && !Settings.AskBeforeInstallingUpdates)
+                if (Settings.AutomaticallyDownloadUpdates && hasInstaller && !Settings.AskBeforeInstallingUpdates)
                 {
                     await DownloadUpdateAsync();
                 }
             }
             else
             {
+                SetUpdateState(UpdateState.UpToDate);
                 UpdateStatus = manual ? "You are up to date." : "No update available.";
                 StatusMessage = UpdateStatus;
                 await AddUpdateHistoryAsync(AppVersion.Current, "Check", "Up to date", UpdateStatus);
@@ -634,6 +678,7 @@ public class SettingsViewModel : BaseViewModel
         }
         catch (Exception ex)
         {
+            SetUpdateState(UpdateState.Failed);
             UpdateStatus = UpdateErrorMessages.For("UpdateCheckFailed", ex.Message);
             StatusMessage = "Could not check for updates.";
             await _updateLogger.LogAsync("Update check threw an unhandled exception.", ex.ToString());
@@ -641,47 +686,69 @@ public class SettingsViewModel : BaseViewModel
         }
         finally
         {
-            IsCheckingForUpdates = false;
             RefreshUpdateProperties();
         }
     }
 
     private async Task DownloadUpdateAsync()
     {
-        if (string.IsNullOrWhiteSpace(Settings.GitHubOwner) || string.IsNullOrWhiteSpace(Settings.GitHubRepository))
+        if (!_lastUpdateResult.IsUpdateAvailable)
         {
-            UpdateStatus = "Set GitHub owner and repo before downloading updates.";
-            return;
+            await CheckForUpdatesAsync(manual: true);
+            if (!_lastUpdateResult.IsUpdateAvailable)
+            {
+                return;
+            }
         }
+
+        _downloadCancellation?.Cancel();
+        _downloadCancellation = new CancellationTokenSource();
+        SetUpdateState(UpdateState.Downloading);
+        DownloadProgress = 0;
+        DownloadDetail = string.Empty;
+        UpdateStatus = "Downloading update...";
+        StatusMessage = "Downloading update...";
 
         try
         {
-            if (!_lastUpdateResult.IsUpdateAvailable)
-            {
-                await CheckForUpdatesAsync(manual: true);
-                if (!_lastUpdateResult.IsUpdateAvailable)
-                {
-                    return;
-                }
-            }
-
-            UpdateStatus = "Downloading update...";
             var result = await _downloadService.DownloadBestWindowsAssetAsync(_lastUpdateResult, progress =>
             {
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     DownloadProgress = progress.Percent;
-                    DownloadDetail = $"{FormatBytes(progress.DownloadedBytes)} / {(progress.TotalBytes is long total ? FormatBytes(total) : "unknown")} at {FormatBytes((long)progress.BytesPerSecond)}/s";
+                    DownloadDetail = $"{FormatBytes(progress.DownloadedBytes)} / {(progress.TotalBytes is long total ? FormatBytes(total) : "?")} at {FormatBytes((long)progress.BytesPerSecond)}/s";
                 });
-            });
+            }, _downloadCancellation.Token);
 
             _downloadedUpdatePath = result.FilePath;
-            UpdateStatus = result.Message;
-            await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Download", result.Success ? "Success" : "Failed", result.TechnicalDetails ?? result.Message);
+            if (result.Success)
+            {
+                SetUpdateState(UpdateState.Downloaded);
+                UpdateStatus = "Update downloaded and ready to install. Click Install Update to apply.";
+                StatusMessage = UpdateStatus;
+                await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Download", "Success", result.Message);
+            }
+            else
+            {
+                SetUpdateState(UpdateState.UpdateAvailable);
+                UpdateStatus = result.Message;
+                StatusMessage = "Download failed.";
+                await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Download", "Failed", result.TechnicalDetails ?? result.Message);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            SetUpdateState(UpdateState.UpdateAvailable);
+            UpdateStatus = UpdateErrorMessages.For("UserCanceled");
+            StatusMessage = "Download canceled.";
+            await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Download", "Canceled", "User canceled the download.");
         }
         catch (Exception ex)
         {
+            SetUpdateState(UpdateState.UpdateAvailable);
             UpdateStatus = UpdateErrorMessages.For("DownloadFailed", ex.Message);
+            StatusMessage = "Download failed.";
+            await _updateLogger.LogAsync("Download threw an unhandled exception.", ex.ToString());
         }
     }
 
@@ -694,16 +761,18 @@ public class SettingsViewModel : BaseViewModel
             return;
         }
 
+        SetUpdateState(UpdateState.Installing);
+        UpdateStatus = "Preparing to install...";
+
         try
         {
             var backupPath = await _safeUpdateService.BackupSettingsAsync(Settings);
             await _safeUpdateService.SaveStateBeforeInstallAsync(Settings);
-            UpdateStatus = $"Settings backed up to {backupPath}. Installing update...";
+            await _updateLogger.LogAsync("Settings backed up before install.", backupPath);
 
             if (!string.IsNullOrWhiteSpace(_downloadedUpdatePath) && File.Exists(_downloadedUpdatePath))
             {
-                var fileInfo = new FileInfo(_downloadedUpdatePath);
-                if (fileInfo.Length == 0)
+                if (new FileInfo(_downloadedUpdatePath).Length == 0)
                 {
                     throw new InvalidOperationException("Downloaded update file is empty.");
                 }
@@ -711,16 +780,26 @@ public class SettingsViewModel : BaseViewModel
                 if (_downloadedUpdatePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
                     || _downloadedUpdatePath.EndsWith(".msi", StringComparison.OrdinalIgnoreCase))
                 {
-                    var answer = MessageBox.Show("The update has been downloaded. Install now and restart the application?", "Install Update", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    var answer = MessageBox.Show(
+                        $"The app needs to close to install the update.\n\nUpdate: {_lastUpdateResult.LatestVersion ?? "Unknown"}\nInstaller: {Path.GetFileName(_downloadedUpdatePath)}\n\nInstall now?",
+                        "Install Update",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question);
+
                     if (answer != MessageBoxResult.Yes)
                     {
+                        SetUpdateState(UpdateState.Downloaded);
                         UpdateStatus = UpdateErrorMessages.For("UserCanceled");
                         await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Install", "Canceled", UpdateStatus);
                         return;
                     }
 
+                    await _updateLogger.LogAsync("Launching installer.", _downloadedUpdatePath);
                     Process.Start(new ProcessStartInfo(_downloadedUpdatePath) { UseShellExecute = true });
                     await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Install", "Started", _downloadedUpdatePath);
+                    SetUpdateState(UpdateState.InstallStarted);
+                    UpdateStatus = "Installer launched. The app will close now.";
+                    await Task.Delay(600);
                     Application.Current.Shutdown();
                     return;
                 }
@@ -730,7 +809,9 @@ public class SettingsViewModel : BaseViewModel
         }
         catch (Exception ex)
         {
+            SetUpdateState(UpdateState.Downloaded);
             UpdateStatus = UpdateErrorMessages.For("InstallFailed", ex.Message);
+            await _updateLogger.LogAsync("Install failed.", ex.ToString());
             await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Install", "Failed", ex.ToString());
         }
     }
@@ -856,6 +937,8 @@ public class SettingsViewModel : BaseViewModel
         OnPropertyChanged(nameof(DownloadSizeText));
         OnPropertyChanged(nameof(HasUpdateAvailable));
         OnPropertyChanged(nameof(VersionText));
+        OnPropertyChanged(nameof(IsCheckingForUpdates));
+        OnPropertyChanged(nameof(CheckForUpdatesButtonText));
     }
 
     private static void OpenUrl(string? url)

@@ -1,5 +1,20 @@
 namespace GameServerManager.Services.Updates;
 
+public enum UpdateState
+{
+    Idle,
+    Checking,
+    UpToDate,
+    UpdateAvailable,
+    NoInstallerFound,
+    Downloading,
+    Downloaded,
+    Installing,
+    InstallStarted,
+    Failed,
+    Cancelled
+}
+
 public sealed record UpdateAsset(
     string Name,
     string DownloadUrl,

@@ -136,6 +136,30 @@ public sealed class GitHubAssetDownloadService
             ?? candidates.FirstOrDefault();
     }
 
+    public void CleanOldDownloads(int daysToKeep = 30)
+    {
+        if (!Directory.Exists(_paths.UpdateDownloadsDirectory))
+        {
+            return;
+        }
+
+        var cutoff = DateTime.UtcNow.AddDays(-daysToKeep);
+        foreach (var file in Directory.EnumerateFiles(_paths.UpdateDownloadsDirectory))
+        {
+            try
+            {
+                if (File.GetLastWriteTimeUtc(file) < cutoff)
+                {
+                    File.Delete(file);
+                }
+            }
+            catch
+            {
+                // ignore — file may be locked or in use
+            }
+        }
+    }
+
     private static string SanitizeFileName(string fileName)
     {
         foreach (var invalid in Path.GetInvalidFileNameChars())
