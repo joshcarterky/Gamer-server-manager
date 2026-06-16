@@ -15,6 +15,7 @@ public class GameDefinition
     public string SavesFolder { get; set; } = string.Empty;
     public string LogsFolder { get; set; } = string.Empty;
     public GameServerFeatures SupportedFeatures { get; set; } = GameServerFeatures.None;
+    public bool SupportsMemoryLimit { get; set; }
     public List<ServerSettingDefinition> SettingsDefinitions { get; set; } = new();
 }
 
@@ -30,5 +31,6 @@ public enum GameServerFeatures
     Backups = 32,
     Console = 64,
     WorldName = 128,
-    MaxPlayers = 256
+    MaxPlayers = 256,
+    MemoryLimit = 512
 }

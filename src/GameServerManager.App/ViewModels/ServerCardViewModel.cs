@@ -11,7 +11,7 @@ public class ServerCardViewModel : BaseViewModel
     private ServerStatus _status;
     private int _cpuPercent;
     private int _ramMb;
-    private int _ramLimitMb = 4096;
+    private int? _ramLimitMb;
     private TimeSpan _uptime = TimeSpan.Zero;
     private int _playerCount;
     private bool _isExpanded;
@@ -99,10 +99,11 @@ public class ServerCardViewModel : BaseViewModel
         private set => SetProperty(ref _cpuPercent, value);
     }
 
-    public int RamPercent => _ramLimitMb <= 0 ? 0 : Math.Clamp(_ramMb * 100 / _ramLimitMb, 0, 100);
+    public int RamPercent => _ramLimitMb is > 0 ? Math.Clamp(_ramMb * 100 / _ramLimitMb.Value, 0, 100) : 0;
     public int RamMb => _ramMb;
-    public int RamLimitMb => _ramLimitMb;
-    public string RamText => $"{FormatMb(_ramMb)} / {FormatMb(_ramLimitMb)}";
+    public int? RamLimitMb => _ramLimitMb;
+    public bool HasRamLimit => _ramLimitMb is > 0;
+    public string RamText => HasRamLimit ? $"{FormatMb(_ramMb)} / {FormatMb(_ramLimitMb!.Value)}" : FormatMb(_ramMb);
     public string Uptime => Status == ServerStatus.Running ? FormatUptime(_uptime) : "-";
     public string Ports => Profile.Ports.Count == 0
         ? "-"
@@ -184,6 +185,7 @@ public class ServerCardViewModel : BaseViewModel
         OnPropertyChanged(nameof(RamPercent));
         OnPropertyChanged(nameof(RamMb));
         OnPropertyChanged(nameof(RamLimitMb));
+        OnPropertyChanged(nameof(HasRamLimit));
         OnPropertyChanged(nameof(RamText));
         OnPropertyChanged(nameof(Uptime));
         OnPropertyChanged(nameof(LastStarted));

@@ -26,27 +26,29 @@ public class MinecraftJavaProvider : GameServerProviderBase
         GameServerFeatures.Backups |
         GameServerFeatures.Console |
         GameServerFeatures.WorldName |
-        GameServerFeatures.MaxPlayers;
+        GameServerFeatures.MaxPlayers |
+        GameServerFeatures.MemoryLimit;
 
     public override IReadOnlyList<ServerSettingDefinition> SettingsDefinitions => new[]
     {
         Text("JavaPath", "Java Path", "java"),
-        Number("MemoryMb", "Memory MB", "4096", 512, 65536),
+        Dropdown("MemoryMode", "Memory Mode", "Auto", new[] { "Auto:Game Default / Auto", "Custom:Custom Limit" }, advanced: true),
+        Number("CustomMemoryMb", "Custom Memory Limit (MB)", null, 512, 65536, advanced: true),
         Number("MaxPlayers", "Max Players", "20", 1, 1000),
         Text("JarFile", "Server Jar", "server.jar", true)
     };
 
     public override ServerLaunchCommand BuildStartCommand(ServerProfile profile)
     {
-        var memory = profile.Settings.TryGetValue("MemoryMb", out var value) ? value : "4096";
         var jar = profile.Settings.TryGetValue("JarFile", out var jarFile) ? jarFile : "server.jar";
         var javaPath = profile.Settings.TryGetValue("JavaPath", out var java) ? java : "java";
+        var memoryArgs = GetMemoryArguments(profile);
 
         return new ServerLaunchCommand
         {
             ExecutablePath = javaPath,
             WorkingDirectory = profile.InstallPath,
-            Arguments = $"-Xms{memory}M -Xmx{memory}M -jar \"{jar}\" nogui {profile.LaunchArgs}".Trim()
+            Arguments = $"{memoryArgs} -jar \"{jar}\" nogui {profile.LaunchArgs}".Trim()
         };
     }
 
@@ -56,6 +58,28 @@ public class MinecraftJavaProvider : GameServerProviderBase
     private static ServerSettingDefinition Text(string key, string displayName, string defaultValue, bool required = false) =>
         new() { SettingKey = key, DisplayName = displayName, DefaultValue = defaultValue, ControlType = SettingControlType.TextBox, IsRequired = required };
 
-    private static ServerSettingDefinition Number(string key, string displayName, string defaultValue, int min, int max) =>
-        new() { SettingKey = key, DisplayName = displayName, DefaultValue = defaultValue, ControlType = SettingControlType.NumberBox, MinValue = min, MaxValue = max };
+    private static ServerSettingDefinition Number(string key, string displayName, string? defaultValue, int min, int max, bool advanced = false) =>
+        new() { SettingKey = key, DisplayName = displayName, DefaultValue = defaultValue, ControlType = SettingControlType.NumberBox, MinValue = min, MaxValue = max, IsAdvanced = advanced };
+
+    private static ServerSettingDefinition Dropdown(string key, string displayName, string defaultValue, string[] options, bool advanced = false) =>
+        new() { SettingKey = key, DisplayName = displayName, DefaultValue = defaultValue, ControlType = SettingControlType.Dropdown, Options = options.ToList(), IsAdvanced = advanced };
+
+    private static string GetMemoryArguments(ServerProfile profile)
+    {
+        var mode = profile.Settings.TryGetValue("MemoryMode", out var memoryMode) ? memoryMode : "Auto";
+        if (!mode.Equals("Custom", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
+
+        var memoryValue = profile.Settings.TryGetValue("CustomMemoryMb", out var customMemory)
+            ? customMemory
+            : profile.Settings.TryGetValue("MemoryMb", out var legacyMemory)
+                ? legacyMemory
+                : string.Empty;
+
+        return int.TryParse(memoryValue, out var memoryMb) && memoryMb > 0
+            ? $"-Xms{memoryMb}M -Xmx{memoryMb}M"
+            : string.Empty;
+    }
 }

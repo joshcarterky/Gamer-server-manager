@@ -24,7 +24,6 @@ public class AppSettings : INotifyPropertyChanged
     private bool _performanceMode;
     private string _loggingLevel = "Information";
     private int _defaultCpuAllocationPercent = 200;
-    private int _defaultRamMb = 4096;
     private int _defaultDiskGb = 50;
     private string _defaultBackupSchedule = "Daily at 02:00";
     private string _defaultRestartPolicy = "Restart on Failure";
@@ -81,7 +80,6 @@ public class AppSettings : INotifyPropertyChanged
     public string LoggingLevel { get => _loggingLevel; set => SetProperty(ref _loggingLevel, value); }
 
     public int DefaultCpuAllocationPercent { get => _defaultCpuAllocationPercent; set => SetProperty(ref _defaultCpuAllocationPercent, value); }
-    public int DefaultRamMb { get => _defaultRamMb; set => SetProperty(ref _defaultRamMb, value); }
     public int DefaultDiskGb { get => _defaultDiskGb; set => SetProperty(ref _defaultDiskGb, value); }
     public string DefaultBackupSchedule { get => _defaultBackupSchedule; set => SetProperty(ref _defaultBackupSchedule, value); }
     public string DefaultRestartPolicy { get => _defaultRestartPolicy; set => SetProperty(ref _defaultRestartPolicy, value); }

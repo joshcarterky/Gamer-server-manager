@@ -339,8 +339,8 @@
                                     <TextBox Text="{Binding Settings.DefaultCpuAllocationPercent, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}"/>
                                 </StackPanel>
                                 <StackPanel Margin="0,0,0,10">
-                                    <TextBlock Text="Default RAM Allocation (MB)" Style="{StaticResource Body}" Margin="0,0,0,6"/>
-                                    <TextBox Text="{Binding Settings.DefaultRamMb, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}"/>
+                                    <TextBlock Text="Memory Mode" Style="{StaticResource Body}" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Game Default / Auto" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
                                 </StackPanel>
                                 <StackPanel Margin="0,0,10,10">
                                     <TextBlock Text="Default Disk Limit (GB)" Style="{StaticResource Body}" Margin="0,0,0,6"/>

@@ -70,8 +70,9 @@ public class DashboardViewModel : BaseViewModel, IDisposable
     public int CpuUsagePercent => OnlineCount == 0 ? 0 : (int)Math.Round(Servers.Where(IsOnline).Average(server => server.CpuPercent));
     public int MemoryUsageMb => Servers.Sum(GetRamUsedMb);
     public int MemoryLimitMb => Servers.Sum(GetRamLimitMb);
+    public bool HasMemoryLimit => MemoryLimitMb > 0;
     public int MemoryUsagePercent => MemoryLimitMb <= 0 ? 0 : Math.Clamp(MemoryUsageMb * 100 / MemoryLimitMb, 0, 100);
-    public string MemoryUsageText => $"{FormatMb(MemoryUsageMb)} / {FormatMb(MemoryLimitMb)}";
+    public string MemoryUsageText => HasMemoryLimit ? $"{FormatMb(MemoryUsageMb)} / {FormatMb(MemoryLimitMb)}" : FormatMb(MemoryUsageMb);
     public long StorageUsageBytes => Servers.Sum(server => GetDirectorySize(GetStorageDirectory(server.Profile)));
     public string StorageUsageText => FormatBytes(StorageUsageBytes);
     public int StorageUsagePercent => Math.Clamp((int)Math.Round(StorageUsageBytes / 1024d / 1024d / 1024d), 0, 100);
@@ -110,6 +111,11 @@ public class DashboardViewModel : BaseViewModel, IDisposable
                 NormalizeProfile(profile);
                 if (_providers.TryGetProvider(profile.GameId, out var provider))
                 {
+                    if (MemorySettingsPolicy.ApplyProfileMigration(profile, provider, out _))
+                    {
+                        await _serversJsonService.UpdateServerAsync(profile);
+                    }
+
                     Servers.Add(new ServerCardViewModel(profile, provider, _processService));
                 }
             }
@@ -246,6 +252,7 @@ public class DashboardViewModel : BaseViewModel, IDisposable
         OnPropertyChanged(nameof(CpuUsagePercent));
         OnPropertyChanged(nameof(MemoryUsageMb));
         OnPropertyChanged(nameof(MemoryLimitMb));
+        OnPropertyChanged(nameof(HasMemoryLimit));
         OnPropertyChanged(nameof(MemoryUsagePercent));
         OnPropertyChanged(nameof(MemoryUsageText));
         OnPropertyChanged(nameof(StorageUsageBytes));
@@ -315,7 +322,7 @@ public class DashboardViewModel : BaseViewModel, IDisposable
 
     private static int GetRamLimitMb(ServerCardViewModel server)
     {
-        return server.RamLimitMb;
+        return server.RamLimitMb ?? 0;
     }
 
     private static string GetStorageDirectory(ServerProfile profile)

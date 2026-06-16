@@ -36,7 +36,7 @@ public sealed class ServerMonitorService
                 Status = status,
                 CpuPercent = isRunning && process != null ? GetCpuPercent(profile.Id, process) : 0,
                 RamMb = isRunning && process != null ? GetRamMb(process) : 0,
-                RamLimitMb = GetRamLimit(profile),
+                RamLimitMb = GetConfiguredRamLimit(profile),
                 Uptime = uptime,
                 PlayerCount = query.PlayerCount,
                 LastStartedAt = profile.LastStartedAt,
@@ -111,11 +111,22 @@ public sealed class ServerMonitorService
         }
     }
 
-    private static int GetRamLimit(ServerProfile profile)
+    private static int? GetConfiguredRamLimit(ServerProfile profile)
     {
-        return profile.Settings.TryGetValue("ramLimitMb", out var value) && int.TryParse(value, out var parsed)
-            ? Math.Max(parsed, 1)
-            : 4096;
+        var memoryMode = profile.Settings.TryGetValue("MemoryMode", out var mode) ? mode : "Auto";
+        if (!memoryMode.Equals("Custom", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (profile.Settings.TryGetValue("CustomMemoryMb", out var customValue) && int.TryParse(customValue, out var customParsed))
+        {
+            return Math.Max(customParsed, 1);
+        }
+
+        return profile.Settings.TryGetValue("MemoryMb", out var legacyValue) && int.TryParse(legacyValue, out var legacyParsed)
+            ? Math.Max(legacyParsed, 1)
+            : null;
     }
 }
 
@@ -127,7 +138,7 @@ public sealed class ServerMonitorSnapshot
     public ServerStatus Status { get; init; }
     public int CpuPercent { get; init; }
     public int RamMb { get; init; }
-    public int RamLimitMb { get; init; }
+    public int? RamLimitMb { get; init; }
     public TimeSpan Uptime { get; init; }
     public int PlayerCount { get; init; }
     public DateTime? LastStartedAt { get; init; }

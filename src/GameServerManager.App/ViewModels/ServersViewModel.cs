@@ -364,6 +364,12 @@ public class ServersViewModel : BaseViewModel, IDisposable
                 if (_providers.TryGetProvider(profile.GameId, out var provider))
                 {
                     NormalizeProfile(profile);
+                    if (MemorySettingsPolicy.ApplyProfileMigration(profile, provider, out var migrationMessage))
+                    {
+                        await _serversJsonService.UpdateServerAsync(profile);
+                        await LogMemoryMigrationAsync(migrationMessage);
+                    }
+
                     Servers.Add(new ServerCardViewModel(profile, provider, _processService));
                 }
             }
@@ -1029,6 +1035,13 @@ public class ServersViewModel : BaseViewModel, IDisposable
         }
 
         return $"{value:0.##} {units[unit]}";
+    }
+
+    private async Task LogMemoryMigrationAsync(string message)
+    {
+        var logPath = Path.Combine(new AppDataPaths().LogsDirectory, "migration.log");
+        Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+        await File.AppendAllTextAsync(logPath, $"[{DateTimeOffset.Now:o}] {message}{Environment.NewLine}");
     }
 
     public void Dispose()

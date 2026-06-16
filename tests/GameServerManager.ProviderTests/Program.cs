@@ -51,7 +51,8 @@ foreach (var gameId in expectedGameIds)
 
     if (provider.GameId == "minecraft_java")
     {
-        profile.Settings["MemoryMb"] = "1024";
+        profile.Settings["MemoryMode"] = "Custom";
+        profile.Settings["CustomMemoryMb"] = "1024";
         profile.Settings["JarFile"] = "server.jar";
     }
 
@@ -65,6 +66,7 @@ await TestRepositorySaveLoadAsync();
 await TestServersJsonAddEditDeleteAsync();
 TestImportDetection();
 await TestImportCopyServiceAsync();
+TestMemoryPolicy();
 await TestArkSurvivalAscendedAsync();
 TestUpdaterVersionComparison();
 TestDiagnosticsMaskSecrets();
@@ -175,6 +177,40 @@ static async Task TestImportCopyServiceAsync()
     {
         DeleteTempRoot(tempRoot);
     }
+}
+
+static void TestMemoryPolicy()
+{
+    var registry = GameProviderRegistry.CreateDefault();
+    Assert(registry.TryGetProvider("minecraft_java", out var minecraft), "Minecraft Java provider missing.");
+    Assert(minecraft.SupportsMemoryLimit, "Minecraft Java should support optional custom memory limits.");
+
+    var autoProfile = CreateTestProfile("minecraft-auto-memory", "Minecraft Auto Memory");
+    autoProfile.GameId = "minecraft_java";
+    autoProfile.InstallPath = "C:\\Servers\\Minecraft";
+    autoProfile.Settings["JarFile"] = "server.jar";
+    autoProfile.Settings["MemoryMode"] = "Auto";
+    var autoCommand = minecraft.BuildStartCommand(autoProfile);
+    Assert(!autoCommand.Arguments.Contains("-Xmx", StringComparison.OrdinalIgnoreCase), "Minecraft Auto memory mode should not add -Xmx.");
+    Assert(!autoCommand.Arguments.Contains("-Xms", StringComparison.OrdinalIgnoreCase), "Minecraft Auto memory mode should not add -Xms.");
+
+    var customProfile = CreateTestProfile("minecraft-custom-memory", "Minecraft Custom Memory");
+    customProfile.GameId = "minecraft_java";
+    customProfile.InstallPath = "C:\\Servers\\Minecraft";
+    customProfile.Settings["JarFile"] = "server.jar";
+    customProfile.Settings["MemoryMode"] = "Custom";
+    customProfile.Settings["CustomMemoryMb"] = "8192";
+    var customCommand = minecraft.BuildStartCommand(customProfile);
+    Assert(customCommand.Arguments.Contains("-Xmx8192M", StringComparison.Ordinal), "Minecraft Custom memory mode should add -Xmx.");
+
+    Assert(registry.TryGetProvider("ark-survival-ascended", out var ark), "ARK ASA provider missing.");
+    var arkProfile = CreateTestProfile("ark-memory", "ARK Memory");
+    arkProfile.GameId = "ark-survival-ascended";
+    arkProfile.Settings["ramLimitMb"] = "4096";
+    var migrated = MemorySettingsPolicy.ApplyProfileMigration(arkProfile, ark, out var message);
+    Assert(migrated, "Unsupported games with legacy memory caps should be migrated.");
+    Assert(!arkProfile.Settings.ContainsKey("ramLimitMb"), "ARK ASA memory cap should be removed.");
+    Assert(message.Contains("Game Default", StringComparison.Ordinal), "Migration message should explain Game Default memory mode.");
 }
 
 static async Task TestArkSurvivalAscendedAsync()

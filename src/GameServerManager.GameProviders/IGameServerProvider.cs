@@ -14,6 +14,7 @@ public interface IGameServerProvider
     string SavesFolder { get; }
     string LogsFolder { get; }
     GameServerFeatures SupportedFeatures { get; }
+    bool SupportsMemoryLimit { get; }
     IReadOnlyList<ServerSettingDefinition> SettingsDefinitions { get; }
 
     GameDefinition GetDefinition();

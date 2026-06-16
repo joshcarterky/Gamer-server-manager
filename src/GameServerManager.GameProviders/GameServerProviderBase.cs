@@ -14,6 +14,7 @@ public abstract class GameServerProviderBase : IGameServerProvider
     public abstract string SavesFolder { get; }
     public abstract string LogsFolder { get; }
     public virtual GameServerFeatures SupportedFeatures => GameServerFeatures.None;
+    public virtual bool SupportsMemoryLimit => SupportedFeatures.HasFlag(GameServerFeatures.MemoryLimit);
     public virtual IReadOnlyList<ServerSettingDefinition> SettingsDefinitions => Array.Empty<ServerSettingDefinition>();
 
     public virtual GameDefinition GetDefinition()
@@ -30,6 +31,7 @@ public abstract class GameServerProviderBase : IGameServerProvider
             SavesFolder = SavesFolder,
             LogsFolder = LogsFolder,
             SupportedFeatures = SupportedFeatures,
+            SupportsMemoryLimit = SupportsMemoryLimit,
             SettingsDefinitions = SettingsDefinitions.ToList()
         };
     }

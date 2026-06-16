@@ -25,6 +25,7 @@ public class ServerProcessService : IDisposable
         }
 
         var provider = _providers.GetProvider(profile.GameId);
+        MemorySettingsPolicy.ApplyProfileMigration(profile, provider, out _);
         var command = provider.BuildStartCommand(profile);
         if (!command.IsValid)
         {
@@ -35,6 +36,8 @@ public class ServerProcessService : IDisposable
         Directory.CreateDirectory(_paths.ServerLogsDirectory);
 
         var logPath = Path.Combine(_paths.ServerLogsDirectory, $"{SafeName(profile.ProfileName)}.log");
+        AppendLog(logPath, $"Starting {profile.ServerName}");
+        AppendLog(logPath, MemorySettingsPolicy.GetStartLogMessage(profile, provider));
         var process = new Process
         {
             StartInfo = new ProcessStartInfo
