@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build Windows Release
+    runs-on: windows-latest
+
+    steps:
+      # Checkout repository at the tagged commit.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Install the .NET SDK used by the WPF app and Velopack CLI.
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # Restore dependencies before build/test.
+      - name: Restore
+        run: dotnet restore GameServerManager.sln
+
+      # Build all projects in release mode.
+      - name: Build
+        run: dotnet build GameServerManager.sln --configuration Release --no-restore
+
+      # Run provider and persistence tests, including ARK ASA and Palworld coverage.
+      - name: Test
+        run: dotnet run --project tests\GameServerManager.ProviderTests\GameServerManager.ProviderTests.csproj --configuration Release
+
+      # Install Velopack's vpk tool. Keep this version aligned with the app PackageReference.
+      - name: Install Velopack CLI
+        run: dotnet tool update -g vpk --version 1.2.0
+
+      # TODO: Add Windows code signing certificate.
+      # TODO: Sign executable before packaging.
+      # TODO: Sign installer after packaging.
+      # TODO: Verify signatures before release upload.
+
+      # Build installer, portable ZIP, update package metadata, checksums, and release notes.
+      - name: Build Release Artifacts
+        shell: pwsh
+        run: .\scripts\release\publish-win-x64.ps1
+
+      # Create GitHub Release and upload all generated artifacts.
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: releases/${{ github.ref_name }}/*
+          body_path: RELEASE_NOTES.md
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}

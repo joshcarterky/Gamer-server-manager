@@ -3,7 +3,9 @@ using GameServerManager.GameProviders;
 using GameServerManager.Services;
 using GameServerManager.Services.ArkSurvivalAscended;
 using GameServerManager.Services.Configuration;
+using GameServerManager.Services.Diagnostics;
 using GameServerManager.Services.Repositories;
+using GameServerManager.Services.Updates;
 
 var registry = GameProviderRegistry.CreateDefault();
 var expectedGameIds = new[]
@@ -63,6 +65,9 @@ await TestRepositorySaveLoadAsync();
 await TestServersJsonAddEditDeleteAsync();
 TestImportDetection();
 await TestArkSurvivalAscendedAsync();
+TestUpdaterVersionComparison();
+TestDiagnosticsMaskSecrets();
+TestPortableModeDetection();
 
 Console.WriteLine("Provider and server data tests passed.");
 
@@ -308,6 +313,53 @@ static async Task TestArkSurvivalAscendedAsync()
         Assert(clusterReport.Errors.Any(error => error.Message.Contains("ClusterID does not match", StringComparison.Ordinal)), "Cluster validation should catch mismatched ClusterID.");
         Assert(clusterReport.Errors.Any(error => error.Message.Contains("conflicts", StringComparison.Ordinal)), "Cluster validation should catch port conflicts.");
         Assert(clusterReport.Warnings.Any(warning => warning.Message.Contains("Aberration_WP", StringComparison.Ordinal)), "Cluster validation should warn when an expected map is missing.");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
+}
+
+static void TestUpdaterVersionComparison()
+{
+    Assert(SemanticVersionInfo.Parse("v1.0.10").CompareTo(SemanticVersionInfo.Parse("v1.0.9")) > 0, "Semantic version comparison should handle v1.0.10 > v1.0.9.");
+    Assert(SemanticVersionInfo.Parse("v1.1.0").GetUpdateTypeComparedTo(SemanticVersionInfo.Parse("v1.0.9")) == "Minor", "Minor update type should be detected.");
+    Assert(SemanticVersionInfo.Parse("v2.0.0").GetUpdateTypeComparedTo(SemanticVersionInfo.Parse("v1.9.9")) == "Major", "Major update type should be detected.");
+    Assert(SemanticVersionInfo.Parse("v1.0.1").GetUpdateTypeComparedTo(SemanticVersionInfo.Parse("v1.0.0")) == "Patch", "Patch update type should be detected.");
+    Assert(SemanticVersionInfo.Parse("v1.0.0-beta.1").CompareTo(SemanticVersionInfo.Parse("v1.0.0")) < 0, "Prerelease should sort before stable release.");
+
+    var assets = new[]
+    {
+        new UpdateAsset("NexusServerManager-Portable-v1.0.1.zip", "https://example.invalid/portable.zip", 10, "application/zip"),
+        new UpdateAsset("NexusServerManager-Setup-v1.0.1.exe", "https://example.invalid/setup.exe", 20, "application/octet-stream")
+    };
+    var best = GitHubAssetDownloadService.PickBestWindowsAsset(assets);
+    Assert(best?.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) == true, "Windows setup asset should be preferred over portable ZIP.");
+}
+
+static void TestDiagnosticsMaskSecrets()
+{
+    var masked = DiagnosticsService.MaskSecrets("{\n  \"ServerPassword\": \"secret\",\n  \"Name\": \"Safe\"\n}");
+    Assert(masked.Contains("********", StringComparison.Ordinal), "Diagnostics should mask password-like values.");
+    Assert(!masked.Contains("secret", StringComparison.Ordinal), "Diagnostics should not retain secret values.");
+    Assert(masked.Contains("Safe", StringComparison.Ordinal), "Diagnostics should preserve safe values.");
+}
+
+static void TestPortableModeDetection()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        File.WriteAllText(Path.Combine(tempRoot, "portable.flag"), string.Empty);
+        var paths = new AppDataPaths(tempRoot);
+        Assert(!paths.IsPortable, "Explicit test roots should not auto-switch into portable mode.");
+
+        var portableInstall = Path.Combine(tempRoot, "GameServerManager-portable");
+        Directory.CreateDirectory(portableInstall);
+        File.WriteAllText(Path.Combine(portableInstall, "portable.flag"), string.Empty);
+        var explicitPortableRoot = Path.Combine(portableInstall, "Data");
+        var portablePaths = new AppDataPaths(explicitPortableRoot);
+        Assert(portablePaths.RootDirectory == explicitPortableRoot, "Explicit root should be preserved for tests and tools.");
     }
     finally
     {

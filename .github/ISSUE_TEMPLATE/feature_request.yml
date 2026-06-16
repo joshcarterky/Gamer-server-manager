@@ -1,0 +1,25 @@
+name: Feature request
+description: Suggest an improvement.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: feature
+    attributes:
+      label: Feature description
+    validations:
+      required: true
+  - type: input
+    id: game
+    attributes:
+      label: Game server affected
+  - type: textarea
+    id: value
+    attributes:
+      label: Why it helps
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or mockups

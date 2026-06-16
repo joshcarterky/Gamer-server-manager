@@ -44,7 +44,18 @@ public class AppSettings : INotifyPropertyChanged
     private string _curseForgeApiKey = string.Empty;
     private int _curseForgeGameId;
     private int _curseForgeTimeoutSeconds = 10;
-    private string _version = "3.0.0";
+    private string _version = "3.0.1";
+    private bool _automaticallyCheckForUpdates = true;
+    private bool _automaticallyDownloadUpdates;
+    private bool _askBeforeInstallingUpdates = true;
+    private bool _includeBetaUpdates;
+    private string _updateChannel = "Stable";
+    private string _updateCheckFrequency = "Daily";
+    private string _githubOwner = "joshcarterky";
+    private string _githubRepository = "Gamer-server-manager";
+    private string _skippedUpdateVersion = string.Empty;
+    private DateTime? _lastUpdateCheckUtc;
+    private DateTime? _remindUpdateAfterUtc;
     private DateTime _lastModifiedUtc = DateTime.UtcNow;
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -95,6 +106,17 @@ public class AppSettings : INotifyPropertyChanged
     public int CurseForgeTimeoutSeconds { get => _curseForgeTimeoutSeconds; set => SetProperty(ref _curseForgeTimeoutSeconds, value); }
 
     public string Version { get => _version; set => SetProperty(ref _version, value); }
+    public bool AutomaticallyCheckForUpdates { get => _automaticallyCheckForUpdates; set => SetProperty(ref _automaticallyCheckForUpdates, value); }
+    public bool AutomaticallyDownloadUpdates { get => _automaticallyDownloadUpdates; set => SetProperty(ref _automaticallyDownloadUpdates, value); }
+    public bool AskBeforeInstallingUpdates { get => _askBeforeInstallingUpdates; set => SetProperty(ref _askBeforeInstallingUpdates, value); }
+    public bool IncludeBetaUpdates { get => _includeBetaUpdates; set => SetProperty(ref _includeBetaUpdates, value); }
+    public string UpdateChannel { get => _updateChannel; set => SetProperty(ref _updateChannel, value); }
+    public string UpdateCheckFrequency { get => _updateCheckFrequency; set => SetProperty(ref _updateCheckFrequency, value); }
+    public string GitHubOwner { get => _githubOwner; set => SetProperty(ref _githubOwner, value); }
+    public string GitHubRepository { get => _githubRepository; set => SetProperty(ref _githubRepository, value); }
+    public string SkippedUpdateVersion { get => _skippedUpdateVersion; set => SetProperty(ref _skippedUpdateVersion, value); }
+    public DateTime? LastUpdateCheckUtc { get => _lastUpdateCheckUtc; set => SetProperty(ref _lastUpdateCheckUtc, value); }
+    public DateTime? RemindUpdateAfterUtc { get => _remindUpdateAfterUtc; set => SetProperty(ref _remindUpdateAfterUtc, value); }
     public DateTime LastModifiedUtc { get => _lastModifiedUtc; set => SetProperty(ref _lastModifiedUtc, value); }
 
     private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

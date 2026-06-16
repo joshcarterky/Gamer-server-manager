@@ -12,6 +12,28 @@ This project follows semantic versioning.
 
 ### Fixed
 
+## [3.0.1] - 2026-06-16
+
+### Added
+
+- Professional GitHub Releases update system with Settings > Updates controls.
+- Startup update notification banner.
+- Updater logging to `updater.log`.
+- Local update history storage.
+- Safe update download folder with progress, speed display, and checksum verification when `checksums.txt` is available.
+- GitHub owner/repository configuration in Settings.
+- Developer update test tools for progress and failure states.
+- Release and update system documentation.
+
+### Changed
+
+- Release metadata now points to `https://github.com/joshcarterky/Gamer-server-manager`.
+- Release packaging regenerates installer, portable ZIP, Velopack feed files, checksums, and update metadata from `VERSION`.
+
+### Fixed
+
+- Fixed Settings page crash caused by a two-way binding on read-only `DownloadProgress`.
+
 ## [3.0.0] - 2026-06-16
 
 ### Added

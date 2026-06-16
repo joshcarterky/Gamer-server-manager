@@ -1,0 +1,31 @@
+name: Server support request
+description: Request support for another dedicated server.
+title: "[Server Support]: "
+labels: ["server-support"]
+body:
+  - type: input
+    id: game-name
+    attributes:
+      label: Game name
+    validations:
+      required: true
+  - type: input
+    id: steam-app-id
+    attributes:
+      label: Steam app ID
+  - type: input
+    id: executable
+    attributes:
+      label: Server executable
+  - type: textarea
+    id: config-files
+    attributes:
+      label: Config files
+  - type: textarea
+    id: ports
+    attributes:
+      label: Ports
+  - type: textarea
+    id: links
+    attributes:
+      label: Useful links

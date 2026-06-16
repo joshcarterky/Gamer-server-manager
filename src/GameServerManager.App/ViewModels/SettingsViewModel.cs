@@ -1,11 +1,16 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using GameServerManager.App.Views;
 using GameServerManager.Core.Models;
 using GameServerManager.Services;
 using GameServerManager.Services.CurseForge;
-using GameServerManager.App.Views;
+using GameServerManager.Services.Diagnostics;
+using GameServerManager.Services.Updates;
+using Velopack;
+using Velopack.Sources;
 
 namespace GameServerManager.App.ViewModels;
 
@@ -32,16 +37,37 @@ public class SettingsCategoryViewModel : BaseViewModel
 public class SettingsViewModel : BaseViewModel
 {
     private readonly AppSettingsService _settingsService;
+    private readonly AppDataPaths _paths;
+    private readonly GitHubReleaseService _releaseService;
+    private readonly SafeUpdateService _safeUpdateService;
+    private readonly DiagnosticsService _diagnosticsService;
+    private readonly UpdateLogger _updateLogger;
+    private readonly UpdateHistoryService _updateHistoryService;
+    private readonly GitHubAssetDownloadService _downloadService;
     private CancellationTokenSource? _autoSaveCancellation;
     private AppSettings _settings = new();
     private SettingsCategoryViewModel? _selectedCategory;
     private string _statusMessage = "Settings loaded.";
     private string _searchText = string.Empty;
     private string _integrationsStatus = string.Empty;
+    private UpdateCheckResult _lastUpdateResult = UpdateCheckResult.NoUpdate(AppVersion.Current, "Stable");
+    private int _downloadProgress;
+    private string _downloadDetail = "0 MB / 0 MB";
+    private string _updateStatus = "No update check has run yet.";
+    private string _updateHistoryText = "No update history recorded yet.";
+    private string? _downloadedUpdatePath;
+    private string _diagnosticsStatus = string.Empty;
 
     public SettingsViewModel()
     {
-        _settingsService = new AppSettingsService();
+        _paths = new AppDataPaths();
+        _settingsService = new AppSettingsService(_paths);
+        _releaseService = new GitHubReleaseService();
+        _safeUpdateService = new SafeUpdateService(_paths, _settingsService);
+        _diagnosticsService = new DiagnosticsService(_paths);
+        _updateLogger = new UpdateLogger(_paths);
+        _updateHistoryService = new UpdateHistoryService(_paths);
+        _downloadService = new GitHubAssetDownloadService(_paths, _updateLogger);
         Categories = new ObservableCollection<SettingsCategoryViewModel>
         {
             new("General", "General"),
@@ -66,6 +92,19 @@ public class SettingsViewModel : BaseViewModel
         ExportCommand = new RelayCommand(async _ => await ExportAsync());
         ImportCommand = new RelayCommand(async _ => await ImportAsync());
         TestCurseForgeCommand = new RelayCommand(async _ => await TestCurseForgeAsync());
+        CheckForUpdatesCommand = new RelayCommand(async _ => await CheckForUpdatesAsync(manual: true));
+        DownloadUpdateCommand = new RelayCommand(async _ => await DownloadUpdateAsync());
+        InstallUpdateCommand = new RelayCommand(async _ => await InstallUpdateAsync());
+        SkipUpdateCommand = new RelayCommand(async _ => await SkipUpdateAsync());
+        RemindLaterCommand = new RelayCommand(async _ => await RemindLaterAsync());
+        ViewReleaseCommand = new RelayCommand(_ => OpenUrl(ReleaseUrl));
+        ExportDiagnosticsCommand = new RelayCommand(async _ => await ExportDiagnosticsAsync());
+        CopyIssueTemplateCommand = new RelayCommand(_ => CopyIssueTemplate());
+        OpenUpdateLogsCommand = new RelayCommand(_ => OpenFolderOrFile(_updateLogger.LogPath));
+        OpenDownloadsFolderCommand = new RelayCommand(_ => OpenFolderOrFile(_paths.UpdateDownloadsDirectory));
+        DeveloperForceUpdateCheckCommand = new RelayCommand(async _ => await DeveloperForceUpdateCheckAsync());
+        DeveloperTestDownloadProgressCommand = new RelayCommand(async _ => await DeveloperTestDownloadProgressAsync());
+        DeveloperTestFailedUpdateCommand = new RelayCommand(async _ => await DeveloperTestFailedUpdateAsync());
         SelectCategory(Categories.First());
         _ = LoadAsync();
     }
@@ -191,6 +230,19 @@ public class SettingsViewModel : BaseViewModel
     public RelayCommand ExportCommand { get; }
     public RelayCommand ImportCommand { get; }
     public RelayCommand TestCurseForgeCommand { get; }
+    public RelayCommand CheckForUpdatesCommand { get; }
+    public RelayCommand DownloadUpdateCommand { get; }
+    public RelayCommand InstallUpdateCommand { get; }
+    public RelayCommand SkipUpdateCommand { get; }
+    public RelayCommand RemindLaterCommand { get; }
+    public RelayCommand ViewReleaseCommand { get; }
+    public RelayCommand ExportDiagnosticsCommand { get; }
+    public RelayCommand CopyIssueTemplateCommand { get; }
+    public RelayCommand OpenUpdateLogsCommand { get; }
+    public RelayCommand OpenDownloadsFolderCommand { get; }
+    public RelayCommand DeveloperForceUpdateCheckCommand { get; }
+    public RelayCommand DeveloperTestDownloadProgressCommand { get; }
+    public RelayCommand DeveloperTestFailedUpdateCommand { get; }
 
     public AppSettings Settings
     {
@@ -220,7 +272,9 @@ public class SettingsViewModel : BaseViewModel
                 OnPropertyChanged(nameof(IsServerDefaultsSelected));
                 OnPropertyChanged(nameof(IsNetworkSelected));
                 OnPropertyChanged(nameof(IsSecuritySelected));
+                OnPropertyChanged(nameof(IsUpdatesSelected));
                 OnPropertyChanged(nameof(IsIntegrationsSelected));
+                OnPropertyChanged(nameof(IsAdvancedSelected));
                 OnPropertyChanged(nameof(IsComingSoonSelected));
             }
         }
@@ -244,7 +298,9 @@ public class SettingsViewModel : BaseViewModel
     public bool IsServerDefaultsSelected => SelectedCategory?.Key == "ServerDefaults";
     public bool IsNetworkSelected => SelectedCategory?.Key == "Network";
     public bool IsSecuritySelected => SelectedCategory?.Key == "Security";
+    public bool IsUpdatesSelected => SelectedCategory?.Key == "Updates";
     public bool IsIntegrationsSelected => SelectedCategory?.Key == "Integrations";
+    public bool IsAdvancedSelected => SelectedCategory?.Key == "Advanced";
     public bool IsComingSoonSelected => SelectedCategory is not null
         && !IsGeneralSelected
         && !IsAppearanceSelected
@@ -252,6 +308,8 @@ public class SettingsViewModel : BaseViewModel
         && !IsServerDefaultsSelected
         && !IsNetworkSelected
         && !IsSecuritySelected
+        && !IsUpdatesSelected
+        && !IsAdvancedSelected
         && !IsIntegrationsSelected;
 
     public string IntegrationsStatus
@@ -265,21 +323,61 @@ public class SettingsViewModel : BaseViewModel
     }
 
     public bool HasIntegrationsStatus => !string.IsNullOrEmpty(_integrationsStatus);
+    public bool HasDiagnosticsStatus => !string.IsNullOrEmpty(_diagnosticsStatus);
 
     public int TotalCategories => Categories.Count;
-    public int TotalSettings => 41;
+    public int TotalSettings => 50;
     public string LastModifiedText => Settings.LastModifiedUtc.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss");
-    public string VersionText => Settings.Version;
+    public string VersionText => AppVersion.Current;
+    public string RepositoryUrl => BuildRepositoryUrl();
+    public string InstallMode => _safeUpdateService.InstallMode;
+    public IReadOnlyList<string> UpdateChannelOptions { get; } = new[] { "Stable", "Beta" };
+    public IReadOnlyList<string> UpdateFrequencyOptions { get; } = new[] { "Every launch", "Daily", "Weekly", "Manual only" };
+    public string CurrentVersion => AppVersion.Current;
+    public string LatestVersion => _lastUpdateResult.LatestVersion ?? "Unknown";
+    public string UpdateChannelText => Settings.IncludeBetaUpdates || Settings.UpdateChannel == "Beta" ? "Beta" : "Stable";
+    public string LastCheckedText => Settings.LastUpdateCheckUtc?.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss") ?? "Never";
+    public string UpdateType => _lastUpdateResult.UpdateType;
+    public string ReleaseNotes => string.IsNullOrWhiteSpace(_lastUpdateResult.ReleaseNotes) ? "No release notes available." : _lastUpdateResult.ReleaseNotes;
+    public string ReleaseDateText => _lastUpdateResult.PublishedAt?.LocalDateTime.ToString("MMM dd, yyyy HH:mm") ?? "Unknown";
+    public string ReleaseUrl => _lastUpdateResult.ReleaseUrl ?? AppVersion.RepositoryUrl;
+    public string DownloadSizeText => _lastUpdateResult.DownloadSizeBytes is long bytes ? FormatBytes(bytes) : "Unknown";
+    public bool HasUpdateAvailable => _lastUpdateResult.IsUpdateAvailable;
+    public int DownloadProgress { get => _downloadProgress; private set => SetProperty(ref _downloadProgress, value); }
+    public string DownloadDetail { get => _downloadDetail; private set => SetProperty(ref _downloadDetail, value); }
+    public string UpdateHistoryText { get => _updateHistoryText; private set => SetProperty(ref _updateHistoryText, value); }
+    public string UpdateStatus
+    {
+        get => _updateStatus;
+        private set => SetProperty(ref _updateStatus, value);
+    }
+
+    public string DiagnosticsStatus
+    {
+        get => _diagnosticsStatus;
+        private set
+        {
+            if (SetProperty(ref _diagnosticsStatus, value))
+                OnPropertyChanged(nameof(HasDiagnosticsStatus));
+        }
+    }
 
     private async Task LoadAsync()
     {
         try
         {
             Settings = await _settingsService.LoadAsync();
+            Settings.Version = AppVersion.Current;
             Settings.PropertyChanged -= OnSettingsPropertyChanged;
             Settings.PropertyChanged += OnSettingsPropertyChanged;
             ApplyRuntimeSettings();
             StatusMessage = $"Loaded settings from {_settingsService.SettingsPath}";
+            RefreshUpdateProperties();
+            await LoadUpdateHistoryAsync();
+            if (ShouldAutoCheckForUpdates())
+            {
+                _ = CheckForUpdatesAsync(manual: false);
+            }
         }
         catch (Exception ex)
         {
@@ -393,6 +491,15 @@ public class SettingsViewModel : BaseViewModel
             ApplyRuntimeSettings();
         }
 
+        if (e.PropertyName is nameof(AppSettings.UpdateChannel)
+            or nameof(AppSettings.IncludeBetaUpdates)
+            or nameof(AppSettings.GitHubOwner)
+            or nameof(AppSettings.GitHubRepository)
+            or nameof(AppSettings.LastUpdateCheckUtc))
+        {
+            RefreshUpdateProperties();
+        }
+
         if (Settings.AutoSaveSettings)
         {
             QueueAutoSave();
@@ -450,6 +557,287 @@ public class SettingsViewModel : BaseViewModel
         {
             IntegrationsStatus = $"Test error: {ex.Message}";
         }
+    }
+
+    private async Task CheckForUpdatesAsync(bool manual)
+    {
+        UpdateStatus = "Checking GitHub Releases...";
+        await _updateLogger.LogAsync("Checking for updates.", $"Current={AppVersion.Current}; Source={BuildRepositoryUrl()}");
+        var includeBeta = Settings.IncludeBetaUpdates || string.Equals(Settings.UpdateChannel, "Beta", StringComparison.OrdinalIgnoreCase);
+        _lastUpdateResult = await _releaseService.CheckLatestAsync(
+            BuildRepositoryUrl(),
+            AppVersion.Current,
+            includeBeta,
+            Settings.SkippedUpdateVersion);
+
+        Settings.LastUpdateCheckUtc = DateTime.UtcNow;
+        await _settingsService.SaveAsync(Settings);
+
+        if (_lastUpdateResult.ErrorMessage is not null)
+        {
+            UpdateStatus = _lastUpdateResult.ErrorMessage;
+            await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? AppVersion.Current, "Check", "Failed", _lastUpdateResult.ErrorMessage);
+        }
+        else if (_lastUpdateResult.IsUpdateAvailable)
+        {
+            UpdateStatus = $"Update available: {_lastUpdateResult.LatestVersion} ({_lastUpdateResult.UpdateType}).";
+            await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Check", "Update available", UpdateStatus);
+            if (Settings.AutomaticallyDownloadUpdates && !Settings.AskBeforeInstallingUpdates)
+            {
+                await DownloadUpdateAsync();
+            }
+        }
+        else
+        {
+            UpdateStatus = manual ? "You are on the latest available version." : "No update available.";
+            await AddUpdateHistoryAsync(AppVersion.Current, "Check", "Up to date", UpdateStatus);
+        }
+
+        RefreshUpdateProperties();
+    }
+
+    private async Task DownloadUpdateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Settings.GitHubOwner) || string.IsNullOrWhiteSpace(Settings.GitHubRepository))
+        {
+            UpdateStatus = "Set GitHub owner and repo before downloading updates.";
+            return;
+        }
+
+        try
+        {
+            if (!_lastUpdateResult.IsUpdateAvailable)
+            {
+                await CheckForUpdatesAsync(manual: true);
+                if (!_lastUpdateResult.IsUpdateAvailable)
+                {
+                    return;
+                }
+            }
+
+            UpdateStatus = "Downloading update...";
+            var result = await _downloadService.DownloadBestWindowsAssetAsync(_lastUpdateResult, progress =>
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    DownloadProgress = progress.Percent;
+                    DownloadDetail = $"{FormatBytes(progress.DownloadedBytes)} / {(progress.TotalBytes is long total ? FormatBytes(total) : "unknown")} at {FormatBytes((long)progress.BytesPerSecond)}/s";
+                });
+            });
+
+            _downloadedUpdatePath = result.FilePath;
+            UpdateStatus = result.Message;
+            await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Download", result.Success ? "Success" : "Failed", result.TechnicalDetails ?? result.Message);
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus = UpdateErrorMessages.For("DownloadFailed", ex.Message);
+        }
+    }
+
+    private async Task InstallUpdateAsync()
+    {
+        var readiness = _safeUpdateService.GetInstallReadiness();
+        if (!readiness.CanInstall && string.IsNullOrWhiteSpace(_downloadedUpdatePath))
+        {
+            UpdateStatus = readiness.Message;
+            return;
+        }
+
+        try
+        {
+            var backupPath = await _safeUpdateService.BackupSettingsAsync(Settings);
+            await _safeUpdateService.SaveStateBeforeInstallAsync(Settings);
+            UpdateStatus = $"Settings backed up to {backupPath}. Installing update...";
+
+            if (!string.IsNullOrWhiteSpace(_downloadedUpdatePath) && File.Exists(_downloadedUpdatePath))
+            {
+                var fileInfo = new FileInfo(_downloadedUpdatePath);
+                if (fileInfo.Length == 0)
+                {
+                    throw new InvalidOperationException("Downloaded update file is empty.");
+                }
+
+                if (_downloadedUpdatePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                    || _downloadedUpdatePath.EndsWith(".msi", StringComparison.OrdinalIgnoreCase))
+                {
+                    var answer = MessageBox.Show("The update has been downloaded. Install now and restart the application?", "Install Update", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    if (answer != MessageBoxResult.Yes)
+                    {
+                        UpdateStatus = UpdateErrorMessages.For("UserCanceled");
+                        await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Install", "Canceled", UpdateStatus);
+                        return;
+                    }
+
+                    Process.Start(new ProcessStartInfo(_downloadedUpdatePath) { UseShellExecute = true });
+                    await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Install", "Started", _downloadedUpdatePath);
+                    Application.Current.Shutdown();
+                    return;
+                }
+            }
+
+            CreateUpdateManager().ApplyUpdatesAndRestart(null, Array.Empty<string>());
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus = UpdateErrorMessages.For("InstallFailed", ex.Message);
+            await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Install", "Failed", ex.ToString());
+        }
+    }
+
+    private async Task SkipUpdateAsync()
+    {
+        if (_lastUpdateResult.LatestVersion is null)
+        {
+            UpdateStatus = "No update version is selected to skip.";
+            return;
+        }
+
+        Settings.SkippedUpdateVersion = _lastUpdateResult.LatestVersion;
+        await _settingsService.SaveAsync(Settings);
+        UpdateStatus = $"Skipped {_lastUpdateResult.LatestVersion}.";
+    }
+
+    private async Task RemindLaterAsync()
+    {
+        Settings.RemindUpdateAfterUtc = DateTime.UtcNow.AddDays(1);
+        await _settingsService.SaveAsync(Settings);
+        UpdateStatus = "Reminder set for tomorrow.";
+    }
+
+    private async Task ExportDiagnosticsAsync()
+    {
+        var reportPath = await _diagnosticsService.ExportAsync(Settings, 0, new[] { "ARK: Survival Ascended", "Palworld" });
+        DiagnosticsStatus = $"Diagnostic report exported to {reportPath}";
+    }
+
+    private void CopyIssueTemplate()
+    {
+        Clipboard.SetText(_diagnosticsService.CreateGitHubIssueTemplate(Settings));
+        DiagnosticsStatus = "GitHub issue template copied to the clipboard.";
+    }
+
+    private UpdateManager CreateUpdateManager()
+    {
+        var includeBeta = Settings.IncludeBetaUpdates || string.Equals(Settings.UpdateChannel, "Beta", StringComparison.OrdinalIgnoreCase);
+        var source = new GithubSource(BuildRepositoryUrl(), accessToken: null, prerelease: includeBeta, downloader: null);
+        var options = new UpdateOptions { ExplicitChannel = includeBeta ? "beta" : "stable" };
+        return new UpdateManager(source, options);
+    }
+
+    private string BuildRepositoryUrl()
+    {
+        var owner = string.IsNullOrWhiteSpace(Settings.GitHubOwner) ? "joshcarterky" : Settings.GitHubOwner.Trim();
+        var repo = string.IsNullOrWhiteSpace(Settings.GitHubRepository) ? "Gamer-server-manager" : Settings.GitHubRepository.Trim();
+        return $"https://github.com/{owner}/{repo}";
+    }
+
+    private async Task LoadUpdateHistoryAsync()
+    {
+        var entries = await _updateHistoryService.LoadAsync();
+        UpdateHistoryText = entries.Count == 0
+            ? "No update history recorded yet."
+            : string.Join(Environment.NewLine, entries.Take(8).Select(e => $"{e.Timestamp.LocalDateTime:g} - {e.Version} - {e.Action} - {e.Status}"));
+    }
+
+    private async Task AddUpdateHistoryAsync(string version, string action, string status, string details)
+    {
+        await _updateHistoryService.AddAsync(new UpdateHistoryEntry(DateTimeOffset.Now, version, action, status, details));
+        await _updateLogger.LogAsync($"{action}: {status}", details);
+        await LoadUpdateHistoryAsync();
+    }
+
+    private async Task DeveloperForceUpdateCheckAsync()
+    {
+        Settings.SkippedUpdateVersion = string.Empty;
+        await CheckForUpdatesAsync(manual: true);
+    }
+
+    private async Task DeveloperTestDownloadProgressAsync()
+    {
+        UpdateStatus = "Testing download progress UI...";
+        for (var progress = 0; progress <= 100; progress += 10)
+        {
+            DownloadProgress = progress;
+            DownloadDetail = $"{progress}% simulated";
+            await Task.Delay(60);
+        }
+
+        UpdateStatus = "Download progress UI test complete.";
+        await AddUpdateHistoryAsync("dev-test", "Developer test", "Success", "Simulated download progress.");
+    }
+
+    private async Task DeveloperTestFailedUpdateAsync()
+    {
+        UpdateStatus = UpdateErrorMessages.For("InstallFailed", "Developer test failure.");
+        await AddUpdateHistoryAsync("dev-test", "Developer test", "Failed", UpdateStatus);
+    }
+
+    private bool ShouldAutoCheckForUpdates()
+    {
+        if (!Settings.AutomaticallyCheckForUpdates || Settings.UpdateCheckFrequency == "Manual only")
+        {
+            return false;
+        }
+
+        if (Settings.RemindUpdateAfterUtc is DateTime remindAfter && remindAfter > DateTime.UtcNow)
+        {
+            return false;
+        }
+
+        return Settings.UpdateCheckFrequency switch
+        {
+            "Every launch" => true,
+            "Weekly" => Settings.LastUpdateCheckUtc is null || Settings.LastUpdateCheckUtc.Value.AddDays(7) <= DateTime.UtcNow,
+            _ => Settings.LastUpdateCheckUtc is null || Settings.LastUpdateCheckUtc.Value.AddDays(1) <= DateTime.UtcNow
+        };
+    }
+
+    private void RefreshUpdateProperties()
+    {
+        OnPropertyChanged(nameof(CurrentVersion));
+        OnPropertyChanged(nameof(LatestVersion));
+        OnPropertyChanged(nameof(UpdateChannelText));
+        OnPropertyChanged(nameof(LastCheckedText));
+        OnPropertyChanged(nameof(UpdateType));
+        OnPropertyChanged(nameof(ReleaseNotes));
+        OnPropertyChanged(nameof(ReleaseDateText));
+        OnPropertyChanged(nameof(ReleaseUrl));
+        OnPropertyChanged(nameof(DownloadSizeText));
+        OnPropertyChanged(nameof(HasUpdateAvailable));
+        OnPropertyChanged(nameof(VersionText));
+    }
+
+    private static void OpenUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return;
+        }
+
+        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+    }
+
+    private static void OpenFolderOrFile(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        if (!File.Exists(path) && !Directory.Exists(path))
+        {
+            Directory.CreateDirectory(Path.HasExtension(path) ? Path.GetDirectoryName(path)! : path);
+        }
+
+        Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes >= 1024 * 1024) return $"{bytes / 1024d / 1024d:0.0} MB";
+        if (bytes >= 1024) return $"{bytes / 1024d:0.0} KB";
+        return $"{bytes} bytes";
     }
 
     private void ApplyRuntimeSettings()

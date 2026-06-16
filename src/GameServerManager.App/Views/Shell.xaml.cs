@@ -5,6 +5,7 @@ using System.Windows.Media;
 using GameServerManager.Core.Models;
 using GameServerManager.App.ViewModels;
 using GameServerManager.Services;
+using GameServerManager.Services.Updates;
 
 namespace GameServerManager.App.Views
 {
@@ -19,6 +20,7 @@ namespace GameServerManager.App.Views
         {
             InitializeComponent();
             _ = LoadSettingsAsync();
+            _ = CheckForUpdateBannerAsync();
             NavigateTo("Dashboard", DashboardButton);
         }
 
@@ -79,6 +81,16 @@ namespace GameServerManager.App.Views
         private void OnCloseClick(object sender, RoutedEventArgs e)
         {
             Close();
+        }
+
+        private void OnViewUpdatesClick(object sender, RoutedEventArgs e)
+        {
+            NavigateTo("Settings", SettingsButton);
+        }
+
+        private void OnDismissUpdateBannerClick(object sender, RoutedEventArgs e)
+        {
+            UpdateBanner.Visibility = Visibility.Collapsed;
         }
 
         private void ToggleMaximize()
@@ -202,6 +214,42 @@ namespace GameServerManager.App.Views
             catch
             {
                 ApplySettings(new AppSettings());
+            }
+        }
+
+        private async Task CheckForUpdateBannerAsync()
+        {
+            try
+            {
+                var settings = await new AppSettingsService().LoadAsync();
+                if (!settings.AutomaticallyCheckForUpdates)
+                {
+                    return;
+                }
+
+                var includeBeta = settings.IncludeBetaUpdates || string.Equals(settings.UpdateChannel, "Beta", StringComparison.OrdinalIgnoreCase);
+                var owner = string.IsNullOrWhiteSpace(settings.GitHubOwner) ? "joshcarterky" : settings.GitHubOwner.Trim();
+                var repo = string.IsNullOrWhiteSpace(settings.GitHubRepository) ? "Gamer-server-manager" : settings.GitHubRepository.Trim();
+                var result = await new GitHubReleaseService().CheckLatestAsync(
+                    $"https://github.com/{owner}/{repo}",
+                    AppVersion.Current,
+                    includeBeta,
+                    settings.SkippedUpdateVersion);
+
+                if (!result.IsUpdateAvailable)
+                {
+                    return;
+                }
+
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    UpdateBannerText.Text = $"Update available: {result.LatestVersion} ({result.UpdateType})";
+                    UpdateBanner.Visibility = Visibility.Visible;
+                });
+            }
+            catch
+            {
+                // Startup update notifications should never block the app shell.
             }
         }
 

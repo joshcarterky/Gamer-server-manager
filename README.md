@@ -1,52 +1,90 @@
 # Nexus Server Manager
 
-Nexus Server Manager is a Windows desktop application for managing dedicated game servers from one place. It is currently early-stage software and is being prepared for a future public GitHub release.
+Nexus Server Manager is a professional Windows desktop app for installing, configuring, running, backing up, and updating dedicated game servers.
 
-## Current Status
+Current version: `v3.0.1`
 
-Version: `v0.1.0`
+## Screenshots
 
-The app currently includes:
+Screenshots will be added before the first public GitHub release.
 
-- WPF desktop shell
-- Dashboard and settings screens
-- Profile-backed Servers tab using `Data/servers.json`
-- Add, edit, delete, import, favorite, search, and filter server profiles
-- Real process start/stop/restart for configured server executables
-- CPU/RAM/uptime monitoring for tracked server processes
-- Console log viewer and manual zip backups
-- Early provider/profile architecture
-- Portable Windows publish support
-- App icon and release packaging groundwork
+## Features
 
-This is still a pre-1.0 release. It is suitable for local testing and feedback, but some game-specific query/RCON/mod workflows are still incomplete.
+- WPF desktop client for Windows.
+- Dashboard, server inventory, settings, update, and diagnostics workflows.
+- Profile-backed server storage with JSON persistence.
+- Start, stop, restart, import, edit, favorite, filter, and backup server profiles.
+- Process monitoring for CPU, RAM, uptime, and timestamps.
+- Safe app update design that keeps user server data outside the install folder.
+- Portable mode with `portable.flag`.
+- Diagnostic report export with secret masking.
 
-## Repository Layout
+## Supported Games
 
-```text
-/
-  src/                         Application source code
-    GameServerManager.App/      WPF UI
-    GameServerManager.Core/     Domain models and core services
-    GameServerManager.GameProviders/
-    GameServerManager.Infrastructure/
-    GameServerManager.Services/
-  assets/                      Icons, screenshots, release branding
-  docs/                        User and developer documentation
-  scripts/                     Build, release, and dev helper scripts
-  tests/                       Future automated tests
-  examples/                    Example configs and profiles
-  releases/                    Local release staging, ignored by Git
-  .github/workflows/           CI workflows
-```
+- ARK: Survival Ascended
+- Palworld
+- Minecraft Java
+- Minecraft Bedrock
+- 7 Days to Die
+- Valheim
+- Rust
+- Generic executable servers
 
-## Requirements
+## ARK ASA Support
 
-- Windows 10 or newer
-- .NET 8 SDK for development
-- .NET Desktop Runtime if running a framework-dependent build
+ARK: Survival Ascended support includes SteamCMD app id `2430930`, launch command generation, cluster validation, INI preservation, backup helpers, health checks, and CurseForge mod browsing.
 
-## Build and Run From Source
+## Palworld Support
+
+Palworld support includes `PalWorldSettings.ini` parsing/writing, launch arguments, REST/RCON settings, backups, presets, validation, health checks, and mod settings support.
+
+## Install
+
+Download the latest installer or portable ZIP from GitHub Releases.
+
+- Installer: run `ServerManager-Setup-vX.Y.Z.exe`.
+- Portable: extract `ServerManager-Portable-vX.Y.Z.zip` to a folder you control and keep `portable.flag` beside the executable.
+
+## First-Time Setup
+
+1. Start the app.
+2. Open Settings.
+3. Confirm the update channel and diagnostics preferences.
+4. Add or import your first server from the Servers page.
+5. Verify server paths, ports, passwords, and backup settings before starting a public server.
+
+## Server Workflows
+
+- Create a server from Servers > Add Server.
+- Import an existing server folder from Servers > Import.
+- Update a game server from its provider-specific tools or SteamCMD workflow.
+- Back up a server before changing configs, mods, or versions.
+- Restore by extracting a known-good backup into the original server folder while the server is stopped.
+
+## App Updates
+
+Open Settings > Updates to check GitHub Releases.
+
+- Stable users receive stable releases only.
+- Beta users can receive prereleases.
+- Updates never delete saved servers, server installs, backups, logs, SteamCMD files, or app settings.
+- Installer builds use Velopack for download/install/restart.
+- Portable builds can check for updates and should be updated by replacing app files while preserving `Data`, `Servers`, and `portable.flag`.
+
+See [UPDATE_SYSTEM.md](UPDATE_SYSTEM.md) for implementation details and [RELEASE.md](RELEASE.md) for publishing steps.
+
+## Troubleshooting
+
+- If update checks fail, verify internet access and the GitHub Releases page.
+- If installation fails, close the app and retry from the installer.
+- If Windows warns about an unknown publisher, the build is not code signed yet.
+- If a server fails to start, verify the executable path, working directory, ports, and required game files.
+
+## Report Bugs
+
+Use the GitHub issue templates and attach a diagnostic report from Settings > Advanced. Do not paste passwords, API keys, RCON passwords, or private tokens.
+
+## Development
 
 ```powershell
 dotnet restore
@@ -54,72 +92,18 @@ dotnet build
 dotnet run --project src\GameServerManager.App\GameServerManager.App.csproj
 ```
 
-## Portable Release Build
+Create release artifacts:
 
 ```powershell
 .\scripts\release\publish-win-x64.ps1
 ```
 
-The portable output is written to:
+Outputs are written to `releases/v{version}/`.
 
-```text
-dist/GameServerManager-portable/
-```
+## Roadmap
 
-## Runtime Data
-
-Nexus Server Manager separates app files from user-created server data.
-
-Installed mode should store data in:
-
-```text
-%APPDATA%\NexusServerManager\
-%USERPROFILE%\Documents\Nexus Server Manager\
-```
-
-Portable mode should store data beside the executable:
-
-```text
-data/
-servers/
-backups/
-logs/
-config/
-tools/
-```
-
-See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for details.
-
-## Supported Games Roadmap
-
-Planned built-in providers:
-
-- ARK Survival Ascended
-- ARK Survival Evolved
-- 7 Days to Die
-- Palworld
-- Minecraft Java
-- Minecraft Bedrock
-- Valheim
-- Rust
-- Conan Exiles
-- Project Zomboid
-- Satisfactory
-- Factorio
-- Generic executable server
-
-## Safety
-
-The app must never delete user server data during updates. Profiles, server installs, saves, backups, logs, configs, mods, and SteamCMD files are runtime data and must not be committed to Git.
-
-## Documentation
-
-- [Install Guide](docs/INSTALL.md)
-- [Configuration Guide](docs/CONFIGURATION.md)
-- [Contributing](CONTRIBUTING.md)
-- [Release Checklist](RELEASE_CHECKLIST.md)
-- [Changelog](CHANGELOG.md)
+See [ROADMAP.md](ROADMAP.md).
 
 ## License
 
-License is not finalized yet. See [LICENSE](LICENSE).
+See [LICENSE](LICENSE).

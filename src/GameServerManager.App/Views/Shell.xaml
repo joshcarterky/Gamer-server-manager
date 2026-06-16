@@ -175,6 +175,7 @@
             <Grid Grid.Column="1">
                 <Grid.RowDefinitions>
                     <RowDefinition x:Name="HeaderRow" Height="58"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
@@ -206,7 +207,27 @@
                     </Grid>
                 </Border>
 
-                <ContentControl Grid.Row="1" x:Name="MainContentArea"/>
+                <Border x:Name="UpdateBanner"
+                        Grid.Row="1"
+                        Visibility="Collapsed"
+                        Background="#173F72"
+                        BorderBrush="#287DFF"
+                        BorderThickness="0,0,0,1"
+                        Padding="16,8">
+                    <DockPanel>
+                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                            <Button Content="View Updates" Style="{StaticResource SidebarButtonStyle}" Click="OnViewUpdatesClick" Margin="8,0,0,0"/>
+                            <Button Content="Later" Style="{StaticResource WindowControlButtonStyle}" Click="OnDismissUpdateBannerClick"/>
+                        </StackPanel>
+                        <TextBlock x:Name="UpdateBannerText"
+                                   Text="Update available"
+                                   Foreground="#EAF2FA"
+                                   FontSize="12"
+                                   VerticalAlignment="Center"/>
+                    </DockPanel>
+                </Border>
+
+                <ContentControl Grid.Row="2" x:Name="MainContentArea"/>
             </Grid>
         </Grid>
     </Border>

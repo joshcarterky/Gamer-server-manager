@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a reproducible problem.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not paste server passwords, API keys, RCON passwords, or private tokens."
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      placeholder: v3.0.1
+    validations:
+      required: true
+  - type: input
+    id: windows-version
+    attributes:
+      label: Windows version
+    validations:
+      required: true
+  - type: dropdown
+    id: game
+    attributes:
+      label: Game server type
+      options:
+        - ARK: Survival Ascended
+        - Palworld
+        - Minecraft Java
+        - Minecraft Bedrock
+        - 7 Days to Die
+        - Valheim
+        - Rust
+        - Generic
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. ..."
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Logs or diagnostics
+      description: Attach an exported diagnostic report after reviewing it for secrets.
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots

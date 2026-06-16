@@ -5,6 +5,7 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <StartupObject>GameServerManager.App.Program</StartupObject>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -17,6 +18,10 @@
     <ProjectReference Include="..\GameServerManager.Core\GameServerManager.Core.csproj" />
     <ProjectReference Include="..\GameServerManager.GameProviders\GameServerManager.GameProviders.csproj" />
     <ProjectReference Include="..\GameServerManager.Services\GameServerManager.Services.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 
 </Project>

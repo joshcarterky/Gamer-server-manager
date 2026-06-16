@@ -415,6 +415,105 @@
                         </StackPanel>
                     </Border>
 
+                    <Border Style="{StaticResource Panel}" Visibility="{Binding IsUpdatesSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel>
+                            <TextBlock Text="UPDATES" Style="{StaticResource PanelTitle}"/>
+
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="160"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="36"/>
+                                    <RowDefinition Height="36"/>
+                                    <RowDefinition Height="36"/>
+                                    <RowDefinition Height="36"/>
+                                    <RowDefinition Height="36"/>
+                                    <RowDefinition Height="36"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Text="Current Version" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="{Binding CurrentVersion}" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="2" Text="Latest Version" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="3" Text="{Binding LatestVersion}" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Row="1" Text="Last Checked" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding LastCheckedText}" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Row="1" Grid.Column="2" Text="Install Mode" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Row="1" Grid.Column="3" Text="{Binding InstallMode}" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Row="2" Text="Update Channel" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding UpdateChannelOptions}" SelectedItem="{Binding Settings.UpdateChannel, Mode=TwoWay}" Style="{StaticResource ComboInput}" Margin="0,0,14,2"/>
+                                <TextBlock Grid.Row="2" Grid.Column="2" Text="Frequency" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Row="2" Grid.Column="3" ItemsSource="{Binding UpdateFrequencyOptions}" SelectedItem="{Binding Settings.UpdateCheckFrequency, Mode=TwoWay}" Style="{StaticResource ComboInput}" Margin="0,0,0,2"/>
+
+                                <TextBlock Grid.Row="3" Text="Download Size" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding DownloadSizeText}" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Row="3" Grid.Column="2" Text="Update Type" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Row="3" Grid.Column="3" Text="{Binding UpdateType}" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Row="4" Text="Release Date" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ReleaseDateText}" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Row="4" Grid.Column="2" Text="Repository" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Row="4" Grid.Column="3" Text="{Binding RepositoryUrl}" Style="{StaticResource Muted}" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Row="5" Text="GitHub Owner" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Settings.GitHubOwner, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}" Margin="0,0,14,2"/>
+                                <TextBlock Grid.Row="5" Grid.Column="2" Text="GitHub Repo" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                <TextBox Grid.Row="5" Grid.Column="3" Text="{Binding Settings.GitHubRepository, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}" Margin="0,0,0,2"/>
+                            </Grid>
+
+                            <UniformGrid Columns="2" Rows="2" Margin="0,0,0,12">
+                                <CheckBox Content="Automatically check for updates" IsChecked="{Binding Settings.AutomaticallyCheckForUpdates}" Style="{StaticResource Check}"/>
+                                <CheckBox Content="Automatically download updates" IsChecked="{Binding Settings.AutomaticallyDownloadUpdates}" Style="{StaticResource Check}"/>
+                                <CheckBox Content="Ask before installing" IsChecked="{Binding Settings.AskBeforeInstallingUpdates}" Style="{StaticResource Check}"/>
+                                <CheckBox Content="Include beta releases" IsChecked="{Binding Settings.IncludeBetaUpdates}" Style="{StaticResource Check}"/>
+                            </UniformGrid>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}" Style="{StaticResource PrimaryButton}" Margin="0"/>
+                                <Button Content="Download Update" Command="{Binding DownloadUpdateCommand}" Style="{StaticResource ToolbarButton}"/>
+                                <Button Content="Install Update" Command="{Binding InstallUpdateCommand}" Style="{StaticResource ToolbarButton}"/>
+                                <Button Content="View Release" Command="{Binding ViewReleaseCommand}" Style="{StaticResource ToolbarButton}"/>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                <Button Content="Open Update Logs" Command="{Binding OpenUpdateLogsCommand}" Style="{StaticResource ToolbarButton}" Margin="0"/>
+                                <Button Content="Open Downloads Folder" Command="{Binding OpenDownloadsFolderCommand}" Style="{StaticResource ToolbarButton}"/>
+                                <Button Content="Force Update Check" Command="{Binding DeveloperForceUpdateCheckCommand}" Style="{StaticResource ToolbarButton}"/>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12" Visibility="{Binding HasUpdateAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Border Background="#173F72" BorderBrush="#287DFF" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,8,0">
+                                    <TextBlock Text="{Binding LatestVersion, StringFormat=Update available: {0}}" Style="{StaticResource Body}"/>
+                                </Border>
+                                <Button Content="Skip" Command="{Binding SkipUpdateCommand}" Style="{StaticResource ToolbarButton}" Margin="0"/>
+                                <Button Content="Later" Command="{Binding RemindLaterCommand}" Style="{StaticResource ToolbarButton}"/>
+                            </StackPanel>
+
+                            <ProgressBar Minimum="0" Maximum="100" Value="{Binding DownloadProgress, Mode=OneWay}" Height="8" Margin="0,0,0,10"/>
+                            <TextBlock Text="{Binding DownloadDetail}" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                            <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+                            <TextBlock Text="Release Notes" Style="{StaticResource Body}" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                            <TextBox Text="{Binding ReleaseNotes, Mode=OneWay}" Style="{StaticResource Input}" MinHeight="190" TextWrapping="Wrap"
+                                     AcceptsReturn="True" IsReadOnly="True" VerticalScrollBarVisibility="Auto"/>
+
+                            <TextBlock Text="Update History" Style="{StaticResource Body}" FontWeight="SemiBold" Margin="0,14,0,6"/>
+                            <TextBox Text="{Binding UpdateHistoryText, Mode=OneWay}" Style="{StaticResource Input}" MinHeight="100" TextWrapping="Wrap"
+                                     AcceptsReturn="True" IsReadOnly="True" VerticalScrollBarVisibility="Auto"/>
+
+                            <TextBlock Text="Developer Test Tools" Style="{StaticResource Body}" FontWeight="SemiBold" Margin="0,14,0,6"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Test Progress UI" Command="{Binding DeveloperTestDownloadProgressCommand}" Style="{StaticResource ToolbarButton}" Margin="0"/>
+                                <Button Content="Test Failed Update" Command="{Binding DeveloperTestFailedUpdateCommand}" Style="{StaticResource ToolbarButton}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
                     <Border Style="{StaticResource Panel}" Visibility="{Binding IsIntegrationsSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <StackPanel>
                             <TextBlock Text="INTEGRATIONS" Style="{StaticResource PanelTitle}"/>
@@ -463,6 +562,27 @@
 
                             <TextBlock Text="{Binding IntegrationsStatus}" Style="{StaticResource Muted}" Margin="0,10,0,0" TextWrapping="Wrap"
                                        Visibility="{Binding HasIntegrationsStatus, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Panel}" Visibility="{Binding IsAdvancedSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel>
+                            <TextBlock Text="ADVANCED" Style="{StaticResource PanelTitle}"/>
+                            <TextBlock Text="Diagnostics" Style="{StaticResource Body}" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                            <TextBlock Text="Diagnostic exports mask passwords, API keys, RCON values, tokens, and secrets before writing a report."
+                                       Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                <Button Content="Export Diagnostic Report" Command="{Binding ExportDiagnosticsCommand}" Style="{StaticResource PrimaryButton}" Margin="0"/>
+                                <Button Content="Copy GitHub Issue Template" Command="{Binding CopyIssueTemplateCommand}" Style="{StaticResource ToolbarButton}"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding DiagnosticsStatus}" Style="{StaticResource Muted}" TextWrapping="Wrap"
+                                       Visibility="{Binding HasDiagnosticsStatus, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                            <TextBlock Text="About" Style="{StaticResource Body}" FontWeight="SemiBold" Margin="0,18,0,6"/>
+                            <DockPanel Margin="0,4"><TextBlock Text="App Version" Style="{StaticResource Body}"/><TextBlock Text="{Binding CurrentVersion}" Style="{StaticResource Body}" HorizontalAlignment="Right"/></DockPanel>
+                            <DockPanel Margin="0,4"><TextBlock Text="GitHub Repository" Style="{StaticResource Body}"/><TextBlock Text="{Binding RepositoryUrl}" Style="{StaticResource Muted}" HorizontalAlignment="Right"/></DockPanel>
+                            <DockPanel Margin="0,4"><TextBlock Text="License" Style="{StaticResource Body}"/><TextBlock Text="See LICENSE" Style="{StaticResource Body}" HorizontalAlignment="Right"/></DockPanel>
+                            <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}" Style="{StaticResource ToolbarButton}" HorizontalAlignment="Left" Margin="0,12,0,0"/>
                         </StackPanel>
                     </Border>
 
