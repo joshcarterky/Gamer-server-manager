@@ -8,10 +8,18 @@ $appProject = Join-Path $root "src\GameServerManager.App\GameServerManager.App.c
 $publishDir = Join-Path $root "dist\GameServerManager-win-x64"
 $portableDir = Join-Path $root "dist\GameServerManager-portable"
 $releaseDir = Join-Path $root "releases\$tag"
-$portableZip = Join-Path $releaseDir "ServerManager-Portable-$tag.zip"
-$checksumsPath = Join-Path $releaseDir "checksums.txt"
-$updateJsonPath = Join-Path $releaseDir "update.json"
-$releaseNotesPath = Join-Path $releaseDir "RELEASE_NOTES.md"
+$publicDir = Join-Path $releaseDir "public"
+$updaterFeedDir = Join-Path $releaseDir "updater-feed"
+$productName = "NexusServerManager"
+$setupFileName = "$productName-Setup-$tag.exe"
+$portableFileName = "$productName-Portable-$tag.zip"
+$checksumsFileName = "$productName-Checksums-$tag.txt"
+$updaterFeedFileName = "$productName-UpdaterFeed-$tag.zip"
+$setupPath = Join-Path $publicDir $setupFileName
+$portableZip = Join-Path $publicDir $portableFileName
+$checksumsPath = Join-Path $publicDir $checksumsFileName
+$updateJsonPath = Join-Path $updaterFeedDir "update.json"
+$releaseBodyPath = Join-Path $releaseDir "RELEASE_BODY.md"
 
 function Assert-UnderRoot([string]$path) {
     $resolvedRoot = [System.IO.Path]::GetFullPath($root)
@@ -30,7 +38,8 @@ try {
         }
     }
 
-    New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $publicDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $updaterFeedDir | Out-Null
 
     dotnet restore GameServerManager.sln
     dotnet build GameServerManager.sln --configuration Release --no-restore
@@ -64,17 +73,16 @@ try {
         --mainExe GameServerManager.App.exe `
         --runtime win-x64 `
         --channel stable `
-        --outputDir $releaseDir
+        --outputDir $updaterFeedDir
 
-    $setup = Get-ChildItem -LiteralPath $releaseDir -Filter "*Setup*.exe" | Select-Object -First 1
-    if ($setup) {
-        Rename-Item -LiteralPath $setup.FullName -NewName "ServerManager-Setup-$tag.exe" -Force
+    $setup = Get-ChildItem -LiteralPath $updaterFeedDir -Filter "*Setup*.exe" | Select-Object -First 1
+    if (-not $setup) {
+        throw "Velopack did not create a setup executable."
     }
+    Move-Item -LiteralPath $setup.FullName -Destination $setupPath -Force
 
-    Copy-Item -LiteralPath "RELEASE_NOTES.md" -Destination $releaseNotesPath -Force
-
-    $artifacts = Get-ChildItem -LiteralPath $releaseDir -File | Where-Object {
-        $_.Name -ne "checksums.txt" -and $_.Name -ne "update.json"
+    $artifacts = Get-ChildItem -LiteralPath $publicDir -File | Where-Object {
+        $_.Name -ne $checksumsFileName
     }
 
     $checksumLines = foreach ($artifact in $artifacts) {
@@ -83,19 +91,63 @@ try {
     }
     $checksumLines | Set-Content -LiteralPath $checksumsPath
 
+    $installerHash = (Get-FileHash -LiteralPath $setupPath -Algorithm SHA256).Hash
+    $portableHash = (Get-FileHash -LiteralPath $portableZip -Algorithm SHA256).Hash
+    $repositoryUrl = "https://github.com/joshcarterky/Gamer-server-manager"
+    $releaseUrl = "$repositoryUrl/releases/tag/$tag"
+    $downloadBaseUrl = "$repositoryUrl/releases/download/$tag"
     $metadata = [ordered]@{
-        version = $tag
+        version = $version
         channel = "stable"
-        releaseDateUtc = (Get-Date).ToUniversalTime().ToString("o")
-        installer = "ServerManager-Setup-$tag.exe"
-        portableZip = "ServerManager-Portable-$tag.zip"
-        checksums = "checksums.txt"
-        releaseNotes = "RELEASE_NOTES.md"
-        minimumVersion = "v1.0.0"
+        releaseDate = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd")
+        installerUrl = "$downloadBaseUrl/$setupFileName"
+        portableUrl = "$downloadBaseUrl/$portableFileName"
+        sha256 = [ordered]@{
+            installer = $installerHash
+            portable = $portableHash
+        }
+        releaseNotesUrl = $releaseUrl
+        minimumSupportedVersion = "3.0.0"
     }
     $metadata | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $updateJsonPath
 
-    Write-Host "Release artifacts written to $releaseDir"
+    $updaterFeedZip = Join-Path $releaseDir $updaterFeedFileName
+    Compress-Archive -Path (Join-Path $updaterFeedDir "*") -DestinationPath $updaterFeedZip -Force
+
+    $releaseNotes = Get-Content -LiteralPath "RELEASE_NOTES.md" -Raw
+    $releaseBody = @"
+# Nexus Server Manager $tag
+
+## Download
+
+Recommended for most users:
+
+**Windows Installer**
+Download: $setupFileName
+
+Portable version:
+
+**Portable ZIP**
+Download: $portableFileName
+
+## Which one should I download?
+
+Use the installer if you want the easiest setup.
+
+Use the portable ZIP if you want to run the app without installing it.
+
+## Do not download these unless you are a developer
+
+Files like update manifests, nupkg packages, checksums, or RELEASES files are for the updater system only.
+
+## Release Notes
+
+$releaseNotes
+"@
+    $releaseBody | Set-Content -LiteralPath $releaseBodyPath
+
+    Write-Host "Public GitHub release assets written to $publicDir"
+    Write-Host "Updater feed files written to $updaterFeedDir"
 }
 finally {
     Pop-Location

@@ -66,10 +66,10 @@ public sealed class GitHubReleaseService
                 .Select(asset => new UpdateAsset(asset.Name, asset.BrowserDownloadUrl, asset.Size, asset.ContentType))
                 .ToArray();
 
-            var preferredAsset = assets.FirstOrDefault(asset =>
-                asset.Name.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase)
-                || asset.Name.Contains("Setup", StringComparison.OrdinalIgnoreCase)
-                || asset.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
+            var preferredAsset = assets.FirstOrDefault(asset => asset.Name.Contains("Setup", StringComparison.OrdinalIgnoreCase))
+                ?? assets.FirstOrDefault(asset => asset.Name.Contains("Installer", StringComparison.OrdinalIgnoreCase))
+                ?? assets.FirstOrDefault(asset => asset.Name.Contains("Portable", StringComparison.OrdinalIgnoreCase))
+                ?? assets.FirstOrDefault(asset => asset.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
 
             return new UpdateCheckResult(
                 true,

@@ -20,7 +20,7 @@ This project follows semantic versioning.
 - Startup update notification banner.
 - Updater logging to `updater.log`.
 - Local update history storage.
-- Safe update download folder with progress, speed display, and checksum verification when `checksums.txt` is available.
+- Safe update download folder with progress, speed display, and checksum verification when a release checksum file is available.
 - GitHub owner/repository configuration in Settings.
 - Developer update test tools for progress and failure states.
 - Release and update system documentation.

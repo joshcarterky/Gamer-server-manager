@@ -4,7 +4,7 @@
 
 - Professional in-app Update Manager powered by GitHub Releases.
 - GitHub owner/repo settings, startup update banner, update history, and updater logs.
-- Safe update downloads folder with progress, speed display, and checksum verification when `checksums.txt` is attached.
+- Safe update downloads folder with progress, speed display, and checksum verification when a release checksum file is attached.
 - Developer update test tools for progress and failure states.
 
 ## Fixed

@@ -50,10 +50,10 @@ jobs:
         shell: pwsh
         run: .\scripts\release\publish-win-x64.ps1
 
-      # Create GitHub Release and upload all generated artifacts.
+      # Create GitHub Release and upload only the clean user-facing assets.
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: releases/${{ github.ref_name }}/*
-          body_path: RELEASE_NOTES.md
+          files: releases/${{ github.ref_name }}/public/*
+          body_path: releases/${{ github.ref_name }}/RELEASE_BODY.md
           prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}

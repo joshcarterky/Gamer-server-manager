@@ -4,6 +4,16 @@ Nexus Server Manager is a professional Windows desktop app for installing, confi
 
 Current version: `v3.0.1`
 
+## Download
+
+Download the latest version from [GitHub Releases](https://github.com/joshcarterky/Gamer-server-manager/releases/latest).
+
+- Windows Installer: recommended for most users.
+- Portable ZIP: advanced users only.
+
+For v3.0.1, most users should download `NexusServerManager-Setup-v3.0.1.exe`.
+Use `NexusServerManager-Portable-v3.0.1.zip` only if you want to run the app without installing it.
+
 ## Screenshots
 
 Screenshots will be added before the first public GitHub release.
@@ -42,8 +52,8 @@ Palworld support includes `PalWorldSettings.ini` parsing/writing, launch argumen
 
 Download the latest installer or portable ZIP from GitHub Releases.
 
-- Installer: run `ServerManager-Setup-vX.Y.Z.exe`.
-- Portable: extract `ServerManager-Portable-vX.Y.Z.zip` to a folder you control and keep `portable.flag` beside the executable.
+- Installer: run `NexusServerManager-Setup-vX.Y.Z.exe`.
+- Portable: extract `NexusServerManager-Portable-vX.Y.Z.zip` to a folder you control and keep `portable.flag` beside the executable.
 
 ## First-Time Setup
 

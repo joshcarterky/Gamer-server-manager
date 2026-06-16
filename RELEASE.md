@@ -24,17 +24,23 @@ Artifacts are written to `releases/vX.Y.Z/`.
 
 ## 3. GitHub Release Assets
 
-Upload these files when creating the GitHub Release:
+Upload only these files when creating the GitHub Release:
 
-- `ServerManager-Setup-vX.Y.Z.exe`
-- `ServerManager-Portable-vX.Y.Z.zip`
-- `NexusServerManager-X.Y.Z-stable-full.nupkg`
+- `NexusServerManager-Setup-vX.Y.Z.exe`
+- `NexusServerManager-Portable-vX.Y.Z.zip`
+- `NexusServerManager-Checksums-vX.Y.Z.txt`
+
+Do not upload Velopack feed files as separate public assets:
+
+- `.nupkg`
 - `RELEASES-stable`
 - `releases.stable.json`
 - `assets.stable.json`
-- `checksums.txt`
-- `RELEASE_NOTES.md`
 - `update.json`
+
+The release script stores those files under `releases/vX.Y.Z/updater-feed/` and creates `NexusServerManager-UpdaterFeed-vX.Y.Z.zip` beside the public folder for maintainer use only.
+
+GitHub Actions uploads `releases/vX.Y.Z/public/*`, so normal users see only the installer, portable ZIP, and checksums file.
 
 ## 4. Publish
 

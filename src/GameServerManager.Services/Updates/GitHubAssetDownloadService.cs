@@ -66,7 +66,9 @@ public sealed class GitHubAssetDownloadService
                 return new UpdateDownloadResult(false, destination, UpdateErrorMessages.For("DownloadFailed", "Downloaded file is missing or empty."));
             }
 
-            var checksumAsset = update.Assets.FirstOrDefault(a => string.Equals(a.Name, "checksums.txt", StringComparison.OrdinalIgnoreCase));
+            var checksumAsset = update.Assets.FirstOrDefault(a =>
+                string.Equals(a.Name, "checksums.txt", StringComparison.OrdinalIgnoreCase)
+                || a.Name.Contains("Checksums", StringComparison.OrdinalIgnoreCase));
             if (checksumAsset is not null)
             {
                 var checksumResult = await VerifyChecksumAsync(destination, checksumAsset.DownloadUrl, cancellationToken);
