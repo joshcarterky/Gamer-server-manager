@@ -474,7 +474,7 @@
                             </UniformGrid>
 
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}" Style="{StaticResource PrimaryButton}" Margin="0"/>
+                                <Button Content="{Binding CheckForUpdatesButtonText}" Command="{Binding CheckForUpdatesCommand}" Style="{StaticResource PrimaryButton}" Margin="0"/>
                                 <Button Content="Download Update" Command="{Binding DownloadUpdateCommand}" Style="{StaticResource ToolbarButton}"/>
                                 <Button Content="Install Update" Command="{Binding InstallUpdateCommand}" Style="{StaticResource ToolbarButton}"/>
                                 <Button Content="View Release" Command="{Binding ViewReleaseCommand}" Style="{StaticResource ToolbarButton}"/>
@@ -494,7 +494,7 @@
                                 <Button Content="Later" Command="{Binding RemindLaterCommand}" Style="{StaticResource ToolbarButton}"/>
                             </StackPanel>
 
-                            <ProgressBar Minimum="0" Maximum="100" Value="{Binding DownloadProgress, Mode=OneWay}" Height="8" Margin="0,0,0,10"/>
+                            <ProgressBar Minimum="0" Maximum="100" Value="{Binding DownloadProgress, Mode=OneWay}" IsIndeterminate="{Binding IsCheckingForUpdates}" Height="8" Margin="0,0,0,10"/>
                             <TextBlock Text="{Binding DownloadDetail}" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8"/>
                             <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,12"/>
 
@@ -582,7 +582,24 @@
                             <DockPanel Margin="0,4"><TextBlock Text="App Version" Style="{StaticResource Body}"/><TextBlock Text="{Binding CurrentVersion}" Style="{StaticResource Body}" HorizontalAlignment="Right"/></DockPanel>
                             <DockPanel Margin="0,4"><TextBlock Text="GitHub Repository" Style="{StaticResource Body}"/><TextBlock Text="{Binding RepositoryUrl}" Style="{StaticResource Muted}" HorizontalAlignment="Right"/></DockPanel>
                             <DockPanel Margin="0,4"><TextBlock Text="License" Style="{StaticResource Body}"/><TextBlock Text="See LICENSE" Style="{StaticResource Body}" HorizontalAlignment="Right"/></DockPanel>
-                            <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}" Style="{StaticResource ToolbarButton}" HorizontalAlignment="Left" Margin="0,12,0,0"/>
+                            <Button Content="{Binding CheckForUpdatesButtonText}" Command="{Binding CheckForUpdatesCommand}" Style="{StaticResource ToolbarButton}" HorizontalAlignment="Left" Margin="0,12,0,0"/>
+                            <Border Background="#101C2A" BorderBrush="#2A4057" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,10,0,0">
+                                <StackPanel>
+                                    <DockPanel Margin="0,0,0,4">
+                                        <TextBlock Text="Latest Version" Style="{StaticResource Body}"/>
+                                        <TextBlock Text="{Binding LatestVersion}" Style="{StaticResource Body}" HorizontalAlignment="Right"/>
+                                    </DockPanel>
+                                    <DockPanel Margin="0,0,0,4">
+                                        <TextBlock Text="Last Checked" Style="{StaticResource Body}"/>
+                                        <TextBlock Text="{Binding LastCheckedText}" Style="{StaticResource Body}" HorizontalAlignment="Right"/>
+                                    </DockPanel>
+                                    <DockPanel Margin="0,0,0,4">
+                                        <TextBlock Text="Release Channel" Style="{StaticResource Body}"/>
+                                        <TextBlock Text="{Binding UpdateChannelText}" Style="{StaticResource Body}" HorizontalAlignment="Right"/>
+                                    </DockPanel>
+                                    <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </Border>
 

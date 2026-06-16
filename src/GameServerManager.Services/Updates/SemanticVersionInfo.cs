@@ -39,6 +39,11 @@ public sealed record SemanticVersionInfo(int Major, int Minor, int Patch, string
         {
             prerelease = normalized[(prereleaseIndex + 1)..];
             normalized = normalized[..prereleaseIndex];
+            if (prerelease.Equals("stable", StringComparison.OrdinalIgnoreCase)
+                || prerelease.Equals("release", StringComparison.OrdinalIgnoreCase))
+            {
+                prerelease = null;
+            }
         }
 
         var parts = normalized.Split('.');

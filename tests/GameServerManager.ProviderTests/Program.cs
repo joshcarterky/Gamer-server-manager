@@ -355,6 +355,8 @@ static void TestUpdaterVersionComparison()
     Assert(SemanticVersionInfo.Parse("v2.0.0").GetUpdateTypeComparedTo(SemanticVersionInfo.Parse("v1.9.9")) == "Major", "Major update type should be detected.");
     Assert(SemanticVersionInfo.Parse("v1.0.1").GetUpdateTypeComparedTo(SemanticVersionInfo.Parse("v1.0.0")) == "Patch", "Patch update type should be detected.");
     Assert(SemanticVersionInfo.Parse("v1.0.0-beta.1").CompareTo(SemanticVersionInfo.Parse("v1.0.0")) < 0, "Prerelease should sort before stable release.");
+    Assert(SemanticVersionInfo.Parse("v3.0.10").CompareTo(SemanticVersionInfo.Parse("v3.0.2")) > 0, "Semantic version comparison should handle v3.0.10 > v3.0.2.");
+    Assert(SemanticVersionInfo.Parse("v3.0.1-stable").CompareTo(SemanticVersionInfo.Parse("3.0.1")) == 0, "Stable suffix tags should compare as stable versions.");
 
     var assets = new[]
     {

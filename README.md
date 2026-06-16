@@ -2,7 +2,7 @@
 
 Nexus Server Manager is a professional Windows desktop app for installing, configuring, running, backing up, and updating dedicated game servers.
 
-Current version: `v3.0.2`
+Current version: `v3.0.3`
 
 ## Download
 
@@ -11,8 +11,8 @@ Download the latest version from [GitHub Releases](https://github.com/joshcarter
 - Windows Installer: recommended for most users.
 - Portable ZIP: advanced users only.
 
-For v3.0.2, most users should download `NexusServerManager-Setup-v3.0.2.exe`.
-Use `NexusServerManager-Portable-v3.0.2.zip` only if you want to run the app without installing it.
+For v3.0.3, most users should download `NexusServerManager-Setup-v3.0.3.exe`.
+Use `NexusServerManager-Portable-v3.0.3.zip` only if you want to run the app without installing it.
 
 ## Screenshots
 

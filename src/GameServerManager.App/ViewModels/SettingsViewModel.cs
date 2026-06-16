@@ -57,15 +57,16 @@ public class SettingsViewModel : BaseViewModel
     private string _updateHistoryText = "No update history recorded yet.";
     private string? _downloadedUpdatePath;
     private string _diagnosticsStatus = string.Empty;
+    private bool _isCheckingForUpdates;
 
     public SettingsViewModel()
     {
         _paths = new AppDataPaths();
         _settingsService = new AppSettingsService(_paths);
-        _releaseService = new GitHubReleaseService();
         _safeUpdateService = new SafeUpdateService(_paths, _settingsService);
         _diagnosticsService = new DiagnosticsService(_paths);
         _updateLogger = new UpdateLogger(_paths);
+        _releaseService = new GitHubReleaseService(logger: _updateLogger);
         _updateHistoryService = new UpdateHistoryService(_paths);
         _downloadService = new GitHubAssetDownloadService(_paths, _updateLogger);
         Categories = new ObservableCollection<SettingsCategoryViewModel>
@@ -92,7 +93,7 @@ public class SettingsViewModel : BaseViewModel
         ExportCommand = new RelayCommand(async _ => await ExportAsync());
         ImportCommand = new RelayCommand(async _ => await ImportAsync());
         TestCurseForgeCommand = new RelayCommand(async _ => await TestCurseForgeAsync());
-        CheckForUpdatesCommand = new RelayCommand(async _ => await CheckForUpdatesAsync(manual: true));
+        CheckForUpdatesCommand = new RelayCommand(async _ => await CheckForUpdatesAsync(manual: true), () => !IsCheckingForUpdates);
         DownloadUpdateCommand = new RelayCommand(async _ => await DownloadUpdateAsync());
         InstallUpdateCommand = new RelayCommand(async _ => await InstallUpdateAsync());
         SkipUpdateCommand = new RelayCommand(async _ => await SkipUpdateAsync());
@@ -343,6 +344,20 @@ public class SettingsViewModel : BaseViewModel
     public string ReleaseUrl => _lastUpdateResult.ReleaseUrl ?? AppVersion.RepositoryUrl;
     public string DownloadSizeText => _lastUpdateResult.DownloadSizeBytes is long bytes ? FormatBytes(bytes) : "Unknown";
     public bool HasUpdateAvailable => _lastUpdateResult.IsUpdateAvailable;
+    public bool IsCheckingForUpdates
+    {
+        get => _isCheckingForUpdates;
+        private set
+        {
+            if (SetProperty(ref _isCheckingForUpdates, value))
+            {
+                OnPropertyChanged(nameof(CheckForUpdatesButtonText));
+                CheckForUpdatesCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public string CheckForUpdatesButtonText => IsCheckingForUpdates ? "Checking..." : "Check for Updates";
     public int DownloadProgress { get => _downloadProgress; private set => SetProperty(ref _downloadProgress, value); }
     public string DownloadDetail { get => _downloadDetail; private set => SetProperty(ref _downloadDetail, value); }
     public string UpdateHistoryText { get => _updateHistoryText; private set => SetProperty(ref _updateHistoryText, value); }
@@ -561,39 +576,74 @@ public class SettingsViewModel : BaseViewModel
 
     private async Task CheckForUpdatesAsync(bool manual)
     {
-        UpdateStatus = "Checking GitHub Releases...";
-        await _updateLogger.LogAsync("Checking for updates.", $"Current={AppVersion.Current}; Source={BuildRepositoryUrl()}");
-        var includeBeta = Settings.IncludeBetaUpdates || string.Equals(Settings.UpdateChannel, "Beta", StringComparison.OrdinalIgnoreCase);
-        _lastUpdateResult = await _releaseService.CheckLatestAsync(
-            BuildRepositoryUrl(),
-            AppVersion.Current,
-            includeBeta,
-            Settings.SkippedUpdateVersion);
-
-        Settings.LastUpdateCheckUtc = DateTime.UtcNow;
-        await _settingsService.SaveAsync(Settings);
-
-        if (_lastUpdateResult.ErrorMessage is not null)
+        if (IsCheckingForUpdates)
         {
-            UpdateStatus = _lastUpdateResult.ErrorMessage;
-            await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? AppVersion.Current, "Check", "Failed", _lastUpdateResult.ErrorMessage);
+            return;
         }
-        else if (_lastUpdateResult.IsUpdateAvailable)
+
+        IsCheckingForUpdates = true;
+        UpdateStatus = "Checking for updates...";
+        StatusMessage = "Checking for updates...";
+        RefreshUpdateProperties();
+
+        try
         {
-            UpdateStatus = $"Update available: {_lastUpdateResult.LatestVersion} ({_lastUpdateResult.UpdateType}).";
-            await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Check", "Update available", UpdateStatus);
-            if (Settings.AutomaticallyDownloadUpdates && !Settings.AskBeforeInstallingUpdates)
+            var repositoryUrl = BuildRepositoryUrl();
+            var includeBeta = Settings.IncludeBetaUpdates || string.Equals(Settings.UpdateChannel, "Beta", StringComparison.OrdinalIgnoreCase);
+            await _updateLogger.LogAsync(
+                "Check for updates button clicked.",
+                $"Current={AppVersion.Current}; Repository={repositoryUrl}; Channel={(includeBeta ? "Beta" : "Stable")}");
+
+            _lastUpdateResult = await _releaseService.CheckLatestAsync(
+                repositoryUrl,
+                AppVersion.Current,
+                includeBeta,
+                Settings.SkippedUpdateVersion);
+
+            Settings.LastUpdateCheckUtc = DateTime.UtcNow;
+            await _settingsService.SaveAsync(Settings);
+
+            if (_lastUpdateResult.ErrorMessage is not null)
             {
-                await DownloadUpdateAsync();
+                UpdateStatus = _lastUpdateResult.ErrorMessage;
+                StatusMessage = "Could not check for updates.";
+                await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? AppVersion.Current, "Check", "Failed", _lastUpdateResult.ErrorMessage);
+            }
+            else if (_lastUpdateResult.IsUpdateAvailable)
+            {
+                var hasInstaller = _lastUpdateResult.Assets.Any(asset =>
+                    asset.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                    && (asset.Name.Contains("Setup", StringComparison.OrdinalIgnoreCase)
+                        || asset.Name.Contains("Installer", StringComparison.OrdinalIgnoreCase)));
+                UpdateStatus = hasInstaller
+                    ? $"Update available: {_lastUpdateResult.LatestVersion} ({_lastUpdateResult.UpdateType})."
+                    : $"Update available: {_lastUpdateResult.LatestVersion}, but no installer asset was found. Open the GitHub release page.";
+                StatusMessage = UpdateStatus;
+                await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Check", "Update available", UpdateStatus);
+                if (Settings.AutomaticallyDownloadUpdates && !Settings.AskBeforeInstallingUpdates)
+                {
+                    await DownloadUpdateAsync();
+                }
+            }
+            else
+            {
+                UpdateStatus = manual ? "You are up to date." : "No update available.";
+                StatusMessage = UpdateStatus;
+                await AddUpdateHistoryAsync(AppVersion.Current, "Check", "Up to date", UpdateStatus);
             }
         }
-        else
+        catch (Exception ex)
         {
-            UpdateStatus = manual ? "You are on the latest available version." : "No update available.";
-            await AddUpdateHistoryAsync(AppVersion.Current, "Check", "Up to date", UpdateStatus);
+            UpdateStatus = UpdateErrorMessages.For("UpdateCheckFailed", ex.Message);
+            StatusMessage = "Could not check for updates.";
+            await _updateLogger.LogAsync("Update check threw an unhandled exception.", ex.ToString());
+            await AddUpdateHistoryAsync(AppVersion.Current, "Check", "Failed", ex.ToString());
         }
-
-        RefreshUpdateProperties();
+        finally
+        {
+            IsCheckingForUpdates = false;
+            RefreshUpdateProperties();
+        }
     }
 
     private async Task DownloadUpdateAsync()

@@ -44,7 +44,7 @@ public class AppSettings : INotifyPropertyChanged
     private string _curseForgeApiKey = string.Empty;
     private int _curseForgeGameId;
     private int _curseForgeTimeoutSeconds = 10;
-    private string _version = "3.0.2";
+    private string _version = "3.0.3";
     private bool _automaticallyCheckForUpdates = true;
     private bool _automaticallyDownloadUpdates;
     private bool _askBeforeInstallingUpdates = true;

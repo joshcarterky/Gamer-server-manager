@@ -12,6 +12,19 @@ This project follows semantic versioning.
 
 ### Fixed
 
+## [3.0.3] - 2026-06-16
+
+### Changed
+
+- Check for Updates now shows a checking state, disables while running, and displays results in both Settings > Updates and Settings > Advanced.
+- GitHub update checks now use `/releases/latest` for stable releases and log API URL, HTTP response, latest tag, version comparison, and asset selection.
+
+### Fixed
+
+- Fixed the Settings Check for Updates button appearing to do nothing when errors occurred or the request was in progress.
+- Improved update error messages for missing releases, rate limits, network failures, invalid JSON, and version parse failures.
+- Fixed version parsing for stable-suffix release tags such as `v3.0.1-stable`.
+
 ## [3.0.2] - 2026-06-16
 
 ### Added

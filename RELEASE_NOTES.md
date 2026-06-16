@@ -1,16 +1,17 @@
-# Nexus Server Manager v3.0.2
+# Nexus Server Manager v3.0.3
 
-## Added
+## Changed
 
-- Import confirmation screen for existing server folders.
-- Managed-folder copy import mode, selected by default.
-- Advanced link-existing-folder import mode with warning text.
-- Import copy progress, cancellation, disk-space checks, duplicate-safe destination naming, and import logging.
+- Check for Updates now gives immediate visible feedback.
+- The button changes to Checking... and disables while the update check is running.
+- Settings > Advanced now shows update status, latest version, last checked time, and release channel.
+- Update checks now log detailed GitHub API, response, version comparison, and asset-selection information.
 
 ## Fixed
 
-- Removed the generic RAM limit prompt from game server add/edit.
-- Imported servers now use the copied managed folder as the active server path by default.
+- Fixed the Check for Updates button appearing to do nothing.
+- Improved GitHub release, rate limit, network, JSON, and version parse error messages.
+- Fixed stable-suffix version tags such as `v3.0.1-stable`.
 
 ## Known Issues
 
