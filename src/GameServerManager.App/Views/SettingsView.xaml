@@ -623,6 +623,34 @@
                                     <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,4">
+                                <Button Content="Download Update" Command="{Binding DownloadUpdateCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"
+                                        Visibility="{Binding ShowDownloadButton, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                <Button Content="Download and Install" Command="{Binding DownloadAndInstallCommand}" Style="{StaticResource ToolbarButton}" Margin="0,0,8,0"
+                                        Visibility="{Binding ShowDownloadButton, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                <Button Content="Cancel Download" Command="{Binding CancelDownloadCommand}" Style="{StaticResource ToolbarButton}" Margin="0,0,8,0"
+                                        Visibility="{Binding ShowCancelButton, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                <Button Content="Install Update" Command="{Binding InstallUpdateCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"
+                                        Visibility="{Binding ShowInstallButton, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                <Button Content="View Release" Command="{Binding ViewReleaseCommand}" Style="{StaticResource ToolbarButton}" Margin="0"/>
+                            </StackPanel>
+
+                            <Border Background="#0F2A1A" BorderBrush="#2ECC71" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,4,0,0"
+                                    Visibility="{Binding ShowReadyToInstall, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Text="✓  Update downloaded and ready to install." Foreground="#62F19F" FontWeight="SemiBold" FontSize="12"/>
+                            </Border>
+
+                            <Border Background="#2A0F0F" BorderBrush="#CC3333" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,4,0,0"
+                                    Visibility="{Binding ShowNoInstallerMessage, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Text="Update found, but no installer is attached to this release. Use View Release to download manually."
+                                           Foreground="#F16262" FontSize="12" TextWrapping="Wrap"/>
+                            </Border>
+
+                            <StackPanel Visibility="{Binding ShowDownloadProgress, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,8,0,0">
+                                <ProgressBar Minimum="0" Maximum="100" Value="{Binding DownloadProgress, Mode=OneWay}" IsIndeterminate="{Binding IsCheckingForUpdates}" Height="8" Margin="0,0,0,6"/>
+                                <TextBlock Text="{Binding DownloadDetail}" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
 

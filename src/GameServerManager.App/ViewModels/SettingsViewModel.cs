@@ -654,7 +654,7 @@ public class SettingsViewModel : BaseViewModel
                 if (hasInstaller)
                 {
                     SetUpdateState(UpdateState.UpdateAvailable);
-                    UpdateStatus = $"Update available: {_lastUpdateResult.LatestVersion} ({_lastUpdateResult.UpdateType}). Click Download Update to continue.";
+                    UpdateStatus = $"Update available: {_lastUpdateResult.LatestVersion} ({_lastUpdateResult.UpdateType}).";
                 }
                 else
                 {
@@ -724,7 +724,7 @@ public class SettingsViewModel : BaseViewModel
             if (result.Success)
             {
                 SetUpdateState(UpdateState.Downloaded);
-                UpdateStatus = "Update downloaded and ready to install. Click Install Update to apply.";
+                UpdateStatus = "Update downloaded and ready to install.";
                 StatusMessage = UpdateStatus;
                 await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Download", "Success", result.Message);
             }
