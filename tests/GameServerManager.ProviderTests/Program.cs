@@ -64,6 +64,7 @@ foreach (var gameId in expectedGameIds)
 await TestRepositorySaveLoadAsync();
 await TestServersJsonAddEditDeleteAsync();
 TestImportDetection();
+await TestImportCopyServiceAsync();
 await TestArkSurvivalAscendedAsync();
 TestUpdaterVersionComparison();
 TestDiagnosticsMaskSecrets();
@@ -142,6 +143,33 @@ static void TestImportDetection()
         var genericProfile = detector.Detect(generic);
         Assert(genericProfile.GameId == "generic_server", "Unknown folders should import as Generic Server.");
         Assert(genericProfile.ExecutablePath.EndsWith("CustomServer.exe", StringComparison.OrdinalIgnoreCase), "Generic import should find an executable.");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
+}
+
+static async Task TestImportCopyServiceAsync()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var source = Path.Combine(tempRoot, "OldServers", "ARK-Island");
+        Directory.CreateDirectory(Path.Combine(source, "ShooterGame", "Binaries", "Win64"));
+        File.WriteAllText(Path.Combine(source, "ShooterGame", "Binaries", "Win64", "ArkAscendedServer.exe"), "server");
+        File.WriteAllText(Path.Combine(source, "server-settings.ini"), "keep");
+
+        var paths = new AppDataPaths(Path.Combine(tempRoot, "ManagedData"));
+        var importService = new ServerImportService(paths);
+        var destination = importService.CreateDestinationPath("ARK-Island");
+        await importService.CopyIntoManagedFolderAsync(source, destination, new Progress<ServerImportProgress>());
+
+        Assert(File.Exists(Path.Combine(destination, "server-settings.ini")), "Import copy should copy server files into managed storage.");
+        Assert(File.Exists(Path.Combine(source, "server-settings.ini")), "Import copy should leave the original server folder untouched.");
+
+        var duplicateDestination = importService.CreateDestinationPath("ARK-Island");
+        Assert(!string.Equals(destination, duplicateDestination, StringComparison.OrdinalIgnoreCase), "Duplicate imports should get a safe alternate destination.");
     }
     finally
     {

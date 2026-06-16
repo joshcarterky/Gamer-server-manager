@@ -1,16 +1,16 @@
-# Nexus Server Manager v3.0.1
+# Nexus Server Manager v3.0.2
 
 ## Added
 
-- Professional in-app Update Manager powered by GitHub Releases.
-- GitHub owner/repo settings, startup update banner, update history, and updater logs.
-- Safe update downloads folder with progress, speed display, and checksum verification when a release checksum file is attached.
-- Developer update test tools for progress and failure states.
+- Import confirmation screen for existing server folders.
+- Managed-folder copy import mode, selected by default.
+- Advanced link-existing-folder import mode with warning text.
+- Import copy progress, cancellation, disk-space checks, duplicate-safe destination naming, and import logging.
 
 ## Fixed
 
-- Fixed a Settings page crash caused by a two-way progress bar binding.
-- Regenerated release artifacts with the real GitHub repository URL.
+- Removed the generic RAM limit prompt from game server add/edit.
+- Imported servers now use the copied managed folder as the active server path by default.
 
 ## Known Issues
 

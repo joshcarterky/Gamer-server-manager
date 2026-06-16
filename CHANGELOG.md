@@ -12,6 +12,23 @@ This project follows semantic versioning.
 
 ### Fixed
 
+## [3.0.2] - 2026-06-16
+
+### Added
+
+- Import confirmation screen showing source, destination, server name, folder size, and detected game type.
+- Copy-into-managed-folder import mode as the default server import behavior.
+- Advanced link-existing-folder import option with warning text.
+- Import copy progress, cancellation, disk-space checks, duplicate-safe destination naming, and `Logs/import.log` logging.
+
+### Changed
+
+- Imported servers now point to the copied managed server folder by default.
+
+### Fixed
+
+- Removed the generic RAM limit prompt from the Add/Edit Server wizard.
+
 ## [3.0.1] - 2026-06-16
 
 ### Added

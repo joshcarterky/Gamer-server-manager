@@ -25,7 +25,6 @@ public class AddServerWizardViewModel : BaseViewModel
     private string _mapName = string.Empty;
     private int _maxPlayers = 10;
     private int _cpuLimit = 100;
-    private int _ramLimit = 4096;
     private bool _autoRestart;
     private bool _autoBackup = true;
     private string _password = string.Empty;
@@ -131,7 +130,6 @@ public class AddServerWizardViewModel : BaseViewModel
     public string MapName { get => _mapName; set => SetProperty(ref _mapName, value); }
     public int MaxPlayers { get => _maxPlayers; set { if (SetProperty(ref _maxPlayers, value)) NotifyReviewChanged(); } }
     public int CpuLimit { get => _cpuLimit; set { if (SetProperty(ref _cpuLimit, value)) NotifyReviewChanged(); } }
-    public int RamLimit { get => _ramLimit; set { if (SetProperty(ref _ramLimit, value)) NotifyReviewChanged(); } }
     public bool AutoRestart { get => _autoRestart; set { if (SetProperty(ref _autoRestart, value)) NotifyReviewChanged(); } }
     public bool AutoBackup { get => _autoBackup; set { if (SetProperty(ref _autoBackup, value)) NotifyReviewChanged(); } }
     public string Password { get => _password; set => SetProperty(ref _password, value); }
@@ -153,7 +151,6 @@ public class AddServerWizardViewModel : BaseViewModel
         $"RCON Port: {RconPort}{Environment.NewLine}" +
         $"Max Players: {MaxPlayers}{Environment.NewLine}" +
         $"CPU Limit: {CpuLimit}%{Environment.NewLine}" +
-        $"RAM Limit: {RamLimit} MB{Environment.NewLine}" +
         $"Auto Restart: {(AutoRestart ? "Enabled" : "Disabled")}{Environment.NewLine}" +
         $"Auto Backup: {(AutoBackup ? "Enabled" : "Disabled")}";
 
@@ -179,7 +176,6 @@ public class AddServerWizardViewModel : BaseViewModel
         RconPassword = string.Empty;
         MaxPlayers = 10;
         CpuLimit = 100;
-        RamLimit = 4096;
         AutoRestart = false;
         AutoBackup = true;
         SelectedProvider = Providers.FirstOrDefault();
@@ -212,7 +208,6 @@ public class AddServerWizardViewModel : BaseViewModel
         MapName = profile.MapName;
         MaxPlayers = profile.MaxPlayers;
         CpuLimit = ParseIntSetting(profile, "cpuLimitPercent", 100);
-        RamLimit = ParseIntSetting(profile, "ramLimitMb", 4096);
         AutoRestart = profile.Settings.TryGetValue("autoRestart", out var autoRestart)
             ? bool.TryParse(autoRestart, out var isEnabled) && isEnabled
             : !string.IsNullOrWhiteSpace(profile.RestartSchedule);
@@ -259,7 +254,6 @@ public class AddServerWizardViewModel : BaseViewModel
                 ["saveDirectory"] = SaveDirectory,
                 ["backupDirectory"] = BackupDirectory,
                 ["cpuLimitPercent"] = CpuLimit.ToString(),
-                ["ramLimitMb"] = RamLimit.ToString(),
                 ["autoRestart"] = AutoRestart.ToString(),
                 ["rconPassword"] = RconPassword
             }

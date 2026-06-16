@@ -53,6 +53,7 @@ public class ServersViewModel : BaseViewModel, IDisposable
     private readonly ServerMonitorService _monitorService;
     private readonly BackupService _backupService;
     private readonly ServerImportDetector _importDetector;
+    private readonly ServerImportService _importService;
     private readonly ServerProfileValidator _profileValidator;
     private readonly DispatcherTimer _refreshTimer;
     private bool _isMonitoringRefreshRunning;
@@ -62,9 +63,22 @@ public class ServersViewModel : BaseViewModel, IDisposable
     private string _message = string.Empty;
     private bool _isAddServerOpen;
     private bool _isConsoleOpen;
+    private bool _isImportConfirmationOpen;
+    private bool _isImportRunning;
+    private bool _linkExistingFolder;
     private string _consoleTitle = "Console";
     private string _consoleText = string.Empty;
+    private string _importSourceFolder = string.Empty;
+    private string _importDestinationFolder = string.Empty;
+    private string _importServerName = string.Empty;
+    private string _importGameName = string.Empty;
+    private string _importEstimatedSize = string.Empty;
+    private string _importStatus = string.Empty;
+    private string _importCurrentFile = string.Empty;
+    private int _importProgress;
     private ServerCardViewModel? _consoleServer;
+    private ServerProfile? _pendingImportProfile;
+    private CancellationTokenSource? _importCancellation;
 
     public ServersViewModel()
     {
@@ -75,6 +89,7 @@ public class ServersViewModel : BaseViewModel, IDisposable
         _monitorService = new ServerMonitorService(_processService, new ServerQueryService());
         _backupService = new BackupService(paths);
         _importDetector = new ServerImportDetector(_providers);
+        _importService = new ServerImportService(paths);
         _profileValidator = new ServerProfileValidator();
         AddServer = new AddServerWizardViewModel(_providers.Providers);
 
@@ -98,6 +113,9 @@ public class ServersViewModel : BaseViewModel, IDisposable
 
         RefreshCommand = new RelayCommand(async _ => await LoadAsync());
         ImportServerCommand = new RelayCommand(async _ => await ImportServerAsync());
+        ConfirmImportCommand = new RelayCommand(async _ => await ConfirmImportAsync());
+        CancelImportCommand = new RelayCommand(_ => CancelImport());
+        CancelImportCopyCommand = new RelayCommand(_ => _importCancellation?.Cancel());
         SaveNewServerCommand = new RelayCommand(async _ => await SaveNewServerAsync());
         ToggleAddServerCommand = new RelayCommand(_ => ToggleAddServer());
         NextAddServerStepCommand = new RelayCommand(_ => AddServer.NextStep());
@@ -139,6 +157,9 @@ public class ServersViewModel : BaseViewModel, IDisposable
 
     public RelayCommand RefreshCommand { get; }
     public RelayCommand ImportServerCommand { get; }
+    public RelayCommand ConfirmImportCommand { get; }
+    public RelayCommand CancelImportCommand { get; }
+    public RelayCommand CancelImportCopyCommand { get; }
     public RelayCommand SaveNewServerCommand { get; }
     public RelayCommand ToggleAddServerCommand { get; }
     public RelayCommand NextAddServerStepCommand { get; }
@@ -221,6 +242,104 @@ public class ServersViewModel : BaseViewModel, IDisposable
         get => _isConsoleOpen;
         set => SetProperty(ref _isConsoleOpen, value);
     }
+
+    public bool IsImportConfirmationOpen
+    {
+        get => _isImportConfirmationOpen;
+        set => SetProperty(ref _isImportConfirmationOpen, value);
+    }
+
+    public bool IsImportRunning
+    {
+        get => _isImportRunning;
+        set
+        {
+            if (SetProperty(ref _isImportRunning, value))
+            {
+                OnPropertyChanged(nameof(CanConfirmImport));
+            }
+        }
+    }
+
+    public bool LinkExistingFolder
+    {
+        get => _linkExistingFolder;
+        set
+        {
+            if (SetProperty(ref _linkExistingFolder, value))
+            {
+                OnPropertyChanged(nameof(ImportModeText));
+                OnPropertyChanged(nameof(ImportDestinationDisplay));
+            }
+        }
+    }
+
+    public string ImportSourceFolder
+    {
+        get => _importSourceFolder;
+        set => SetProperty(ref _importSourceFolder, value);
+    }
+
+    public string ImportDestinationFolder
+    {
+        get => _importDestinationFolder;
+        set
+        {
+            if (SetProperty(ref _importDestinationFolder, value))
+            {
+                OnPropertyChanged(nameof(ImportDestinationDisplay));
+            }
+        }
+    }
+
+    public string ImportServerName
+    {
+        get => _importServerName;
+        set
+        {
+            if (SetProperty(ref _importServerName, value))
+            {
+                ImportDestinationFolder = _importService.CreateDestinationPath(value);
+            }
+        }
+    }
+
+    public string ImportGameName
+    {
+        get => _importGameName;
+        set => SetProperty(ref _importGameName, value);
+    }
+
+    public string ImportEstimatedSize
+    {
+        get => _importEstimatedSize;
+        set => SetProperty(ref _importEstimatedSize, value);
+    }
+
+    public string ImportStatus
+    {
+        get => _importStatus;
+        set => SetProperty(ref _importStatus, value);
+    }
+
+    public string ImportCurrentFile
+    {
+        get => _importCurrentFile;
+        set => SetProperty(ref _importCurrentFile, value);
+    }
+
+    public int ImportProgress
+    {
+        get => _importProgress;
+        set => SetProperty(ref _importProgress, value);
+    }
+
+    public string ImportModeText => LinkExistingFolder
+        ? "Advanced: link existing folder without copying."
+        : "Recommended: copy into the managed server folder.";
+
+    public string ImportDestinationDisplay => LinkExistingFolder ? ImportSourceFolder : ImportDestinationFolder;
+    public bool CanConfirmImport => !IsImportRunning;
 
     public string ConsoleTitle
     {
@@ -307,14 +426,118 @@ public class ServersViewModel : BaseViewModel, IDisposable
             }
 
             var profile = _importDetector.Detect(dialog.FolderName);
-            await _serversJsonService.AddServerAsync(profile);
-            Message = $"Imported {profile.ServerName} as {GetGameName(profile.GameId)}.";
-            await LoadAsync();
+            _pendingImportProfile = profile;
+            ImportStatus = "Calculating folder size...";
+            ImportProgress = 0;
+            ImportCurrentFile = string.Empty;
+            ImportSourceFolder = dialog.FolderName;
+            ImportGameName = GetGameName(profile.GameId);
+            ImportServerName = profile.ServerName;
+            LinkExistingFolder = false;
+            ImportEstimatedSize = FormatBytes(await _importService.CalculateFolderSizeAsync(dialog.FolderName));
+            IsImportConfirmationOpen = true;
+            Message = "Review the import options before continuing.";
         }
         catch (Exception ex)
         {
             Message = $"Import failed: {ex.Message}";
         }
+    }
+
+    private async Task ConfirmImportAsync()
+    {
+        if (_pendingImportProfile == null || IsImportRunning)
+        {
+            return;
+        }
+
+        IsImportRunning = true;
+        ImportProgress = 0;
+        _importCancellation = new CancellationTokenSource();
+
+        try
+        {
+            ServerProfile profile;
+            if (LinkExistingFolder)
+            {
+                var answer = MessageBox.Show(
+                    "Linked servers remain in their original location. Moving or deleting the original folder may break this server.",
+                    "Link Existing Folder",
+                    MessageBoxButton.OKCancel,
+                    MessageBoxImage.Warning);
+                if (answer != MessageBoxResult.OK)
+                {
+                    Message = "Import cancelled.";
+                    return;
+                }
+
+                profile = _pendingImportProfile;
+                profile.ServerName = ImportServerName;
+                profile.ProfileName = ImportServerName;
+                MarkImported(profile, ImportSourceFolder, copied: false);
+                await _importService.LogAsync($"Linked imported server. Source={ImportSourceFolder}");
+            }
+            else
+            {
+                ImportStatus = "Copying server files...";
+                var destination = ImportDestinationFolder;
+                if (Directory.Exists(destination))
+                {
+                    throw new IOException($"Destination folder already exists: {destination}");
+                }
+
+                var progress = new Progress<ServerImportProgress>(update =>
+                {
+                    ImportStatus = update.Status;
+                    ImportCurrentFile = update.CurrentFile;
+                    ImportProgress = update.Percent;
+                    ImportEstimatedSize = $"{FormatBytes(update.CopiedBytes)} / {FormatBytes(update.TotalBytes)} at {FormatBytes((long)update.BytesPerSecond)}/s";
+                });
+
+                await _importService.CopyIntoManagedFolderAsync(ImportSourceFolder, destination, progress, _importCancellation.Token);
+                profile = _importDetector.Detect(destination);
+                profile.ServerName = ImportServerName;
+                profile.ProfileName = ImportServerName;
+                MarkImported(profile, ImportSourceFolder, copied: true);
+            }
+
+            await _serversJsonService.AddServerAsync(profile);
+            IsImportConfirmationOpen = false;
+            Message = LinkExistingFolder
+                ? $"Linked {profile.ServerName} as {GetGameName(profile.GameId)}."
+                : $"Imported {profile.ServerName} into the managed server folder.";
+            _pendingImportProfile = null;
+            await LoadAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            ImportStatus = "Import canceled.";
+            Message = "Import canceled.";
+        }
+        catch (Exception ex)
+        {
+            ImportStatus = "Import failed.";
+            Message = $"Import failed: {ex.Message}";
+        }
+        finally
+        {
+            _importCancellation?.Dispose();
+            _importCancellation = null;
+            IsImportRunning = false;
+        }
+    }
+
+    private void CancelImport()
+    {
+        if (IsImportRunning)
+        {
+            _importCancellation?.Cancel();
+            return;
+        }
+
+        IsImportConfirmationOpen = false;
+        _pendingImportProfile = null;
+        Message = "Import cancelled.";
     }
 
     private void ToggleAddServer()
@@ -772,6 +995,40 @@ public class ServersViewModel : BaseViewModel, IDisposable
     private string GetGameName(string gameId)
     {
         return _providers.TryGetProvider(gameId, out var provider) ? provider.GameName : gameId;
+    }
+
+    private static void MarkImported(ServerProfile profile, string originalSourcePath, bool copied)
+    {
+        profile.Notes = copied
+            ? $"Imported from {originalSourcePath}"
+            : $"Linked imported server from {originalSourcePath}";
+        profile.Settings["tags"] = AddTag(profile.Settings.TryGetValue("tags", out var tags) ? tags : string.Empty, "imported");
+        profile.Settings["imported"] = "true";
+        profile.Settings["originalImportPath"] = originalSourcePath;
+        profile.Settings["importMode"] = copied ? "copied" : "linked";
+        profile.ModifiedAt = DateTime.UtcNow;
+    }
+
+    private static string AddTag(string tags, string tag)
+    {
+        return tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(value => value.Equals(tag, StringComparison.OrdinalIgnoreCase))
+            ? tags
+            : string.IsNullOrWhiteSpace(tags) ? tag : $"{tags}, {tag}";
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        double value = bytes;
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return $"{value:0.##} {units[unit]}";
     }
 
     public void Dispose()

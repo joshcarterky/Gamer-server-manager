@@ -577,11 +577,7 @@
                                 <TextBox Text="{Binding AddServer.CpuLimit, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}"/>
                             </StackPanel>
 
-                            <StackPanel Grid.Row="1" Margin="0,0,8,10">
-                                <TextBlock Text="RAM Limit (MB)" Foreground="#A8B7C8" FontSize="12" Margin="0,0,0,5"/>
-                                <TextBox Text="{Binding AddServer.RamLimit, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}"/>
-                            </StackPanel>
-                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,22,0,10">
+                            <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,10">
                                 <CheckBox Content="Auto Restart" IsChecked="{Binding AddServer.AutoRestart, Mode=TwoWay}" Foreground="#EAF2FA" Margin="0,0,0,10"/>
                                 <CheckBox Content="Auto Backup" IsChecked="{Binding AddServer.AutoBackup, Mode=TwoWay}" Foreground="#EAF2FA"/>
                             </StackPanel>
@@ -611,6 +607,85 @@
 
         <Border Grid.RowSpan="4"
                 Panel.ZIndex="60"
+                Background="#AA000814"
+                Visibility="{Binding IsImportConfirmationOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Border Style="{StaticResource Panel}"
+                    Width="820"
+                    MaxWidth="960"
+                    Padding="22"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="Import Server" Foreground="White" FontSize="22" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding ImportModeText, Mode=OneWay}" Foreground="#A8B7C8" FontSize="13" Margin="0,5,0,16"/>
+
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="Source folder" Style="{StaticResource HeaderText}" Margin="0,0,12,10"/>
+                        <TextBlock Grid.Column="1" Text="{Binding ImportSourceFolder, Mode=OneWay}" Style="{StaticResource BodyText}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                        <TextBlock Grid.Row="1" Text="Destination" Style="{StaticResource HeaderText}" Margin="0,0,12,10"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ImportDestinationDisplay, Mode=OneWay}" Style="{StaticResource BodyText}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                        <TextBlock Grid.Row="2" Text="Server name" Style="{StaticResource HeaderText}" Margin="0,0,12,10"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding ImportServerName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}" Margin="0,0,0,10"/>
+
+                        <TextBlock Grid.Row="3" Text="Game type" Style="{StaticResource HeaderText}" Margin="0,0,12,10"/>
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ImportGameName, Mode=OneWay}" Style="{StaticResource BodyText}" Margin="0,0,0,10"/>
+
+                        <TextBlock Grid.Row="4" Text="Folder size" Style="{StaticResource HeaderText}" Margin="0,0,12,0"/>
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ImportEstimatedSize, Mode=OneWay}" Style="{StaticResource BodyText}"/>
+                    </Grid>
+
+                    <Border Background="#101C2A" BorderBrush="#2A4057" BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,0,0,14">
+                        <StackPanel>
+                            <CheckBox Content="Link existing folder instead of copying"
+                                      IsChecked="{Binding LinkExistingFolder, Mode=TwoWay}"
+                                      Foreground="#EAF2FA"/>
+                            <TextBlock Text="Advanced option. Linked servers stay in their original location, so moving or deleting that folder can break the server."
+                                       Foreground="#FFCF8A"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Margin="24,7,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Visibility="{Binding IsImportRunning, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,0,0,14">
+                        <TextBlock Text="{Binding ImportStatus, Mode=OneWay}" Foreground="#EAF2FA" FontSize="13" FontWeight="SemiBold"/>
+                        <ProgressBar Value="{Binding ImportProgress, Mode=OneWay}" Maximum="100" Height="8" Width="Auto" Margin="0,8,0,8"/>
+                        <TextBlock Text="{Binding ImportCurrentFile, Mode=OneWay}" Foreground="#A8B7C8" FontSize="12" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="Cancel"
+                                Command="{Binding CancelImportCommand, Mode=OneWay}"
+                                Style="{StaticResource ToolbarButton}"/>
+                        <Button Content="Stop Copy"
+                                Command="{Binding CancelImportCopyCommand, Mode=OneWay}"
+                                Visibility="{Binding IsImportRunning, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                Style="{StaticResource ToolbarButton}"/>
+                        <Button Content="Import"
+                                Command="{Binding ConfirmImportCommand, Mode=OneWay}"
+                                IsEnabled="{Binding CanConfirmImport, Mode=OneWay}"
+                                Style="{StaticResource PrimaryButton}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+
+        <Border Grid.RowSpan="4"
+                Panel.ZIndex="70"
                 Background="#AA000814"
                 Visibility="{Binding IsConsoleOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
             <Border Style="{StaticResource Panel}"
