@@ -1,5 +1,22 @@
 # Release Notes
 
+## v3.0.8
+
+## Changed
+
+- **Settings > Updates is now the only client-update center** - update checks, latest version details, release channels, downloads, install actions, release notes, update history, logs, and GitHub repository source settings now live under Settings > Updates.
+- **Settings > Advanced is now diagnostics-focused** - Advanced now contains diagnostics, logging, troubleshooting, and About information only. It no longer duplicates update buttons or latest-release status.
+- **Update settings UI has been reorganized** - Updates now includes overview, actions, automatic update behavior, release channel, release information, update history, and advanced update source cards.
+- **Settings navigation polish** - selected, hover, keyboard focus, and disabled states are visually distinct so only one category appears selected at a time.
+
+## Fixed
+
+- **Automatic download preference** - automatic download behavior now respects "Ask before downloading" instead of incorrectly using the install confirmation setting.
+- **Update fallback text** - version, release date, and download size fields now use clearer text such as "Not checked yet" and "Not provided by release" instead of confusing unknown states.
+- **Advanced update duplication regression coverage** - tests now verify that Advanced does not expose update commands or release status fields.
+
+---
+
 ## v3.0.7
 
 ## Fixed

@@ -46,7 +46,11 @@ public class AppSettings : INotifyPropertyChanged
     private string _version = "3.0.3";
     private bool _automaticallyCheckForUpdates = true;
     private bool _automaticallyDownloadUpdates;
+    private bool _askBeforeDownloadingUpdates = true;
     private bool _askBeforeInstallingUpdates = true;
+    private bool _notifyWhenUpdateAvailable = true;
+    private bool _downloadUpdatesInBackground = true;
+    private bool _openReleaseNotesAfterUpdate = true;
     private bool _includeBetaUpdates;
     private string _updateChannel = "Stable";
     private string _updateCheckFrequency = "Daily";
@@ -55,6 +59,10 @@ public class AppSettings : INotifyPropertyChanged
     private string _skippedUpdateVersion = string.Empty;
     private DateTime? _lastUpdateCheckUtc;
     private DateTime? _remindUpdateAfterUtc;
+    private bool _verboseStartupLogging;
+    private bool _serviceDiagnosticsEnabled;
+    private int _maximumLogRetentionDays = 30;
+    private int _maximumLogFileSizeMb = 10;
     private DateTime _lastModifiedUtc = DateTime.UtcNow;
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -106,7 +114,11 @@ public class AppSettings : INotifyPropertyChanged
     public string Version { get => _version; set => SetProperty(ref _version, value); }
     public bool AutomaticallyCheckForUpdates { get => _automaticallyCheckForUpdates; set => SetProperty(ref _automaticallyCheckForUpdates, value); }
     public bool AutomaticallyDownloadUpdates { get => _automaticallyDownloadUpdates; set => SetProperty(ref _automaticallyDownloadUpdates, value); }
+    public bool AskBeforeDownloadingUpdates { get => _askBeforeDownloadingUpdates; set => SetProperty(ref _askBeforeDownloadingUpdates, value); }
     public bool AskBeforeInstallingUpdates { get => _askBeforeInstallingUpdates; set => SetProperty(ref _askBeforeInstallingUpdates, value); }
+    public bool NotifyWhenUpdateAvailable { get => _notifyWhenUpdateAvailable; set => SetProperty(ref _notifyWhenUpdateAvailable, value); }
+    public bool DownloadUpdatesInBackground { get => _downloadUpdatesInBackground; set => SetProperty(ref _downloadUpdatesInBackground, value); }
+    public bool OpenReleaseNotesAfterUpdate { get => _openReleaseNotesAfterUpdate; set => SetProperty(ref _openReleaseNotesAfterUpdate, value); }
     public bool IncludeBetaUpdates { get => _includeBetaUpdates; set => SetProperty(ref _includeBetaUpdates, value); }
     public string UpdateChannel { get => _updateChannel; set => SetProperty(ref _updateChannel, value); }
     public string UpdateCheckFrequency { get => _updateCheckFrequency; set => SetProperty(ref _updateCheckFrequency, value); }
@@ -115,6 +127,10 @@ public class AppSettings : INotifyPropertyChanged
     public string SkippedUpdateVersion { get => _skippedUpdateVersion; set => SetProperty(ref _skippedUpdateVersion, value); }
     public DateTime? LastUpdateCheckUtc { get => _lastUpdateCheckUtc; set => SetProperty(ref _lastUpdateCheckUtc, value); }
     public DateTime? RemindUpdateAfterUtc { get => _remindUpdateAfterUtc; set => SetProperty(ref _remindUpdateAfterUtc, value); }
+    public bool VerboseStartupLogging { get => _verboseStartupLogging; set => SetProperty(ref _verboseStartupLogging, value); }
+    public bool ServiceDiagnosticsEnabled { get => _serviceDiagnosticsEnabled; set => SetProperty(ref _serviceDiagnosticsEnabled, value); }
+    public int MaximumLogRetentionDays { get => _maximumLogRetentionDays; set => SetProperty(ref _maximumLogRetentionDays, value); }
+    public int MaximumLogFileSizeMb { get => _maximumLogFileSizeMb; set => SetProperty(ref _maximumLogFileSizeMb, value); }
     public DateTime LastModifiedUtc { get => _lastModifiedUtc; set => SetProperty(ref _lastModifiedUtc, value); }
 
     private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

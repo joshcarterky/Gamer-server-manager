@@ -69,6 +69,7 @@ await TestImportCopyServiceAsync();
 TestMemoryPolicy();
 await TestArkSurvivalAscendedAsync();
 TestUpdaterVersionComparison();
+TestSettingsUpdateSeparation();
 TestDiagnosticsMaskSecrets();
 TestPortableModeDetection();
 
@@ -401,6 +402,38 @@ static void TestUpdaterVersionComparison()
     };
     var best = GitHubAssetDownloadService.PickBestWindowsAsset(assets);
     Assert(best?.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) == true, "Windows setup asset should be preferred over portable ZIP.");
+}
+
+static void TestSettingsUpdateSeparation()
+{
+    var xamlPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "GameServerManager.App", "Views", "SettingsView.xaml"));
+    var xaml = File.ReadAllText(xamlPath);
+    var advancedStart = xaml.IndexOf("IsAdvancedSelected", StringComparison.Ordinal);
+    var comingSoonStart = xaml.IndexOf("IsComingSoonSelected", StringComparison.Ordinal);
+    Assert(advancedStart > 0 && comingSoonStart > advancedStart, "Settings XAML should contain the Advanced page block.");
+
+    var advancedBlock = xaml[advancedStart..comingSoonStart];
+    var forbiddenAdvancedText = new[]
+    {
+        "CheckForUpdatesCommand",
+        "DownloadUpdateCommand",
+        "InstallUpdateCommand",
+        "CancelDownloadCommand",
+        "Latest Version",
+        "Last Checked",
+        "Release Channel",
+        "UpdateStatus",
+        "Release Notes"
+    };
+
+    foreach (var forbidden in forbiddenAdvancedText)
+    {
+        Assert(!advancedBlock.Contains(forbidden, StringComparison.Ordinal), $"Advanced page should not contain update UI: {forbidden}");
+    }
+
+    Assert(xaml.Contains("Client Updates", StringComparison.Ordinal), "Updates page should expose the Client Updates center.");
+    Assert(xaml.Contains("Advanced Update Source", StringComparison.Ordinal), "Updates page should own repository source configuration.");
+    Assert(xaml.Contains("CheckForUpdatesCommand", StringComparison.Ordinal), "Updates page should retain the update check command.");
 }
 
 static void TestDiagnosticsMaskSecrets()

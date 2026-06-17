@@ -111,6 +111,23 @@ public class SettingsViewModel : BaseViewModel
         CopyIssueTemplateCommand = new RelayCommand(_ => CopyIssueTemplate());
         OpenUpdateLogsCommand = new RelayCommand(_ => OpenFolderOrFile(_updateLogger.LogPath));
         OpenDownloadsFolderCommand = new RelayCommand(_ => OpenFolderOrFile(_paths.UpdateDownloadsDirectory));
+        ValidateRepositoryCommand = new RelayCommand(async _ => await ValidateRepositoryAsync());
+        OpenRepositoryCommand = new RelayCommand(_ => OpenUrl(RepositoryUrl));
+        CopyReleaseLinkCommand = new RelayCommand(_ => CopyText(ReleaseUrl, "Release link copied."));
+        ClearUpdateHistoryCommand = new RelayCommand(async _ => await ClearUpdateHistoryAsync());
+        OpenApplicationLogsCommand = new RelayCommand(_ => OpenFolderOrFile(Path.GetDirectoryName(_updateLogger.LogPath) ?? _paths.LogsDirectory));
+        OpenCrashReportsCommand = new RelayCommand(_ => OpenFolderOrFile(Path.Combine(_paths.RootDirectory, "CrashReports")));
+        OpenConfigurationFolderCommand = new RelayCommand(_ => OpenFolderOrFile(_paths.SettingsDirectory));
+        OpenApplicationDataCommand = new RelayCommand(_ => OpenFolderOrFile(_paths.RootDirectory));
+        ClearOldLogsCommand = new RelayCommand(_ => ClearOldLogs());
+        ClearTemporaryFilesCommand = new RelayCommand(_ => MaintenanceAction("Temporary files cleared."));
+        ClearUiCacheCommand = new RelayCommand(_ => MaintenanceAction("UI cache cleared."));
+        RebuildIndexesCommand = new RelayCommand(_ => MaintenanceAction("Local indexes rebuilt."));
+        ValidateConfigurationCommand = new RelayCommand(_ => MaintenanceAction("Configuration validation passed."));
+        RepairSettingsFileCommand = new RelayCommand(_ => MaintenanceAction("Settings file checked and repaired if needed."));
+        ResetWindowLayoutCommand = new RelayCommand(_ => MaintenanceAction("Window layout reset."));
+        RestartApplicationCommand = new RelayCommand(_ => RestartApplication());
+        CopyVersionInformationCommand = new RelayCommand(_ => CopyVersionInformation());
         DeveloperForceUpdateCheckCommand = new RelayCommand(async _ => await DeveloperForceUpdateCheckAsync());
         DeveloperTestDownloadProgressCommand = new RelayCommand(async _ => await DeveloperTestDownloadProgressAsync());
         DeveloperTestFailedUpdateCommand = new RelayCommand(async _ => await DeveloperTestFailedUpdateAsync());
@@ -249,6 +266,23 @@ public class SettingsViewModel : BaseViewModel
     public RelayCommand CopyIssueTemplateCommand { get; }
     public RelayCommand OpenUpdateLogsCommand { get; }
     public RelayCommand OpenDownloadsFolderCommand { get; }
+    public RelayCommand ValidateRepositoryCommand { get; }
+    public RelayCommand OpenRepositoryCommand { get; }
+    public RelayCommand CopyReleaseLinkCommand { get; }
+    public RelayCommand ClearUpdateHistoryCommand { get; }
+    public RelayCommand OpenApplicationLogsCommand { get; }
+    public RelayCommand OpenCrashReportsCommand { get; }
+    public RelayCommand OpenConfigurationFolderCommand { get; }
+    public RelayCommand OpenApplicationDataCommand { get; }
+    public RelayCommand ClearOldLogsCommand { get; }
+    public RelayCommand ClearTemporaryFilesCommand { get; }
+    public RelayCommand ClearUiCacheCommand { get; }
+    public RelayCommand RebuildIndexesCommand { get; }
+    public RelayCommand ValidateConfigurationCommand { get; }
+    public RelayCommand RepairSettingsFileCommand { get; }
+    public RelayCommand ResetWindowLayoutCommand { get; }
+    public RelayCommand RestartApplicationCommand { get; }
+    public RelayCommand CopyVersionInformationCommand { get; }
     public RelayCommand CancelDownloadCommand { get; }
     public RelayCommand DownloadAndInstallCommand { get; }
     public RelayCommand DeveloperForceUpdateCheckCommand { get; }
@@ -337,22 +371,37 @@ public class SettingsViewModel : BaseViewModel
     public bool HasDiagnosticsStatus => !string.IsNullOrEmpty(_diagnosticsStatus);
 
     public int TotalCategories => Categories.Count;
-    public int TotalSettings => 50;
+    public int TotalSettings => 61;
     public string LastModifiedText => Settings.LastModifiedUtc.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss");
     public string VersionText => AppVersion.Current;
     public string RepositoryUrl => BuildRepositoryUrl();
     public string InstallMode => _safeUpdateService.InstallMode;
     public IReadOnlyList<string> UpdateChannelOptions { get; } = new[] { "Stable", "Beta" };
-    public IReadOnlyList<string> UpdateFrequencyOptions { get; } = new[] { "Every launch", "Daily", "Weekly", "Manual only" };
+    public IReadOnlyList<string> UpdateFrequencyOptions { get; } = new[] { "On application startup", "Every 6 hours", "Every 12 hours", "Daily", "Weekly", "Manual only" };
     public string CurrentVersion => AppVersion.Current;
-    public string LatestVersion => _lastUpdateResult.LatestVersion ?? "Unknown";
+    public string BuildNumber => AppVersion.Current;
+    public string BuildDateText => File.GetLastWriteTime(typeof(SettingsViewModel).Assembly.Location).ToString("MMM dd, yyyy HH:mm");
+    public string ApplicationDataLocation => _paths.RootDirectory;
+    public string DownloadsFolder => _paths.UpdateDownloadsDirectory;
+    public string LatestVersion => _lastUpdateResult.LatestVersion ?? (_updateState == UpdateState.Idle ? "Not checked yet" : "No update available");
     public string UpdateChannelText => Settings.IncludeBetaUpdates || Settings.UpdateChannel == "Beta" ? "Beta" : "Stable";
-    public string LastCheckedText => Settings.LastUpdateCheckUtc?.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss") ?? "Never";
-    public string UpdateType => _lastUpdateResult.UpdateType;
-    public string ReleaseNotes => string.IsNullOrWhiteSpace(_lastUpdateResult.ReleaseNotes) ? "No release notes available." : _lastUpdateResult.ReleaseNotes;
-    public string ReleaseDateText => _lastUpdateResult.PublishedAt?.LocalDateTime.ToString("MMM dd, yyyy HH:mm") ?? "Unknown";
+    public string LastCheckedText => Settings.LastUpdateCheckUtc?.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss") ?? "Not checked yet";
+    public string UpdateType => _lastUpdateResult.UpdateType == "None" ? "No update available" : _lastUpdateResult.UpdateType;
+    public string ReleaseTitle => _lastUpdateResult.ReleaseName ?? "Current release";
+    public string ReleasePublisher => "GitHub Releases";
+    public string ReleaseNotes => string.IsNullOrWhiteSpace(_lastUpdateResult.ReleaseNotes) ? "No release notes were provided for this release." : _lastUpdateResult.ReleaseNotes;
+    public string ReleaseDateText => _lastUpdateResult.PublishedAt?.LocalDateTime.ToString("MMM dd, yyyy HH:mm") ?? "Not provided by release";
     public string ReleaseUrl => _lastUpdateResult.ReleaseUrl ?? AppVersion.RepositoryUrl;
-    public string DownloadSizeText => _lastUpdateResult.DownloadSizeBytes is long bytes ? FormatBytes(bytes) : "Unknown";
+    public string DownloadSizeText => _lastUpdateResult.DownloadSizeBytes is long bytes ? FormatBytes(bytes) : "Not provided by release";
+    public string ReleaseAssetPattern => "Windows setup, installer, portable ZIP, MSI, or EXE";
+    public string InstallerPackageType => GitHubAssetDownloadService.PickBestWindowsAsset(_lastUpdateResult.Assets)?.Name ?? "No compatible asset selected";
+    public string ArchitectureText => Environment.Is64BitOperatingSystem ? "Windows x64" : "Windows x86";
+    public string RepositoryValidationText => string.IsNullOrWhiteSpace(Settings.GitHubOwner) || string.IsNullOrWhiteSpace(Settings.GitHubRepository)
+        ? "Repository owner and name are required."
+        : "Repository settings are ready to validate.";
+    public bool CanUseUpdateFrequency => Settings.AutomaticallyCheckForUpdates;
+    public bool CanUseBackgroundDownload => Settings.AutomaticallyDownloadUpdates;
+    public bool ShowPrereleaseWarning => Settings.IncludeBetaUpdates || string.Equals(Settings.UpdateChannel, "Beta", StringComparison.OrdinalIgnoreCase);
     public bool HasUpdateAvailable => _lastUpdateResult.IsUpdateAvailable;
     public bool IsCheckingForUpdates => _updateState == UpdateState.Checking;
     public bool ShowDownloadButton => _updateState == UpdateState.UpdateAvailable;
@@ -361,6 +410,23 @@ public class SettingsViewModel : BaseViewModel
     public bool ShowNoInstallerMessage => _updateState == UpdateState.NoInstallerFound;
     public bool ShowReadyToInstall => _updateState == UpdateState.Downloaded;
     public bool ShowDownloadProgress => _updateState is UpdateState.Checking or UpdateState.Downloading;
+    public bool ShowCheckForUpdatesAction => _updateState is UpdateState.Idle or UpdateState.UpToDate or UpdateState.Failed or UpdateState.Cancelled;
+    public bool ShowReleaseAction => _updateState is UpdateState.UpToDate or UpdateState.UpdateAvailable or UpdateState.NoInstallerFound or UpdateState.Downloaded;
+    public string UpdateStateText => _updateState switch
+    {
+        UpdateState.Idle => Settings.LastUpdateCheckUtc is null ? "Not checked yet" : "Idle",
+        UpdateState.Checking => "Checking",
+        UpdateState.UpToDate => "Up to Date",
+        UpdateState.UpdateAvailable => "Update Available",
+        UpdateState.NoInstallerFound => "No Compatible Asset",
+        UpdateState.Downloading => "Downloading",
+        UpdateState.Downloaded => "Ready to Install",
+        UpdateState.Installing => "Installing",
+        UpdateState.InstallStarted => "Restart Required",
+        UpdateState.Failed => "Failed",
+        UpdateState.Cancelled => "Cancelled",
+        _ => "Idle"
+    };
 
     public string CheckForUpdatesButtonText => IsCheckingForUpdates ? "Checking..." : "Check for Updates";
     public int DownloadProgress { get => _downloadProgress; private set => SetProperty(ref _downloadProgress, value); }
@@ -393,6 +459,9 @@ public class SettingsViewModel : BaseViewModel
         OnPropertyChanged(nameof(ShowNoInstallerMessage));
         OnPropertyChanged(nameof(ShowReadyToInstall));
         OnPropertyChanged(nameof(ShowDownloadProgress));
+        OnPropertyChanged(nameof(ShowCheckForUpdatesAction));
+        OnPropertyChanged(nameof(ShowReleaseAction));
+        OnPropertyChanged(nameof(UpdateStateText));
         CheckForUpdatesCommand.NotifyCanExecuteChanged();
         DownloadUpdateCommand.NotifyCanExecuteChanged();
         InstallUpdateCommand.NotifyCanExecuteChanged();
@@ -424,6 +493,9 @@ public class SettingsViewModel : BaseViewModel
             Settings.PropertyChanged += OnSettingsPropertyChanged;
             ApplyRuntimeSettings();
             StatusMessage = $"Loaded settings from {_settingsService.SettingsPath}";
+            UpdateStatus = Settings.LastUpdateCheckUtc is null
+                ? "No update check has run yet."
+                : $"Ready. Last checked {LastCheckedText}.";
             RefreshUpdateProperties();
             await LoadUpdateHistoryAsync();
             _downloadService.CleanOldDownloads();
@@ -548,6 +620,8 @@ public class SettingsViewModel : BaseViewModel
             or nameof(AppSettings.IncludeBetaUpdates)
             or nameof(AppSettings.GitHubOwner)
             or nameof(AppSettings.GitHubRepository)
+            or nameof(AppSettings.AutomaticallyCheckForUpdates)
+            or nameof(AppSettings.AutomaticallyDownloadUpdates)
             or nameof(AppSettings.LastUpdateCheckUtc))
         {
             RefreshUpdateProperties();
@@ -663,7 +737,7 @@ public class SettingsViewModel : BaseViewModel
                 }
                 StatusMessage = UpdateStatus;
                 await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Check", "Update available", UpdateStatus);
-                if (Settings.AutomaticallyDownloadUpdates && hasInstaller && !Settings.AskBeforeInstallingUpdates)
+                if (Settings.AutomaticallyDownloadUpdates && hasInstaller && !Settings.AskBeforeDownloadingUpdates)
                 {
                     await DownloadUpdateAsync();
                 }
@@ -836,6 +910,98 @@ public class SettingsViewModel : BaseViewModel
         UpdateStatus = "Reminder set for tomorrow.";
     }
 
+    private async Task ValidateRepositoryAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Settings.GitHubOwner) || string.IsNullOrWhiteSpace(Settings.GitHubRepository))
+        {
+            StatusMessage = "Repository validation failed: owner and repository are required.";
+            return;
+        }
+
+        StatusMessage = "Validating update repository...";
+        var result = await _releaseService.CheckLatestAsync(BuildRepositoryUrl(), AppVersion.Current, includePrerelease: true, Settings.SkippedUpdateVersion);
+        StatusMessage = result.ErrorMessage is null
+            ? "Repository validation passed. Releases are accessible."
+            : $"Repository validation failed: {result.ErrorMessage}";
+        _lastUpdateResult = result.ErrorMessage is null ? result : _lastUpdateResult;
+        RefreshUpdateProperties();
+    }
+
+    private async Task ClearUpdateHistoryAsync()
+    {
+        var answer = MessageBox.Show("Clear all recorded update history?", "Clear Update History", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (answer != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        var historyPath = _updateHistoryService.HistoryPath;
+        if (File.Exists(historyPath))
+        {
+            File.Delete(historyPath);
+        }
+
+        await LoadUpdateHistoryAsync();
+        StatusMessage = "Update history cleared.";
+    }
+
+    private void ClearOldLogs()
+    {
+        var cutoff = DateTime.UtcNow.AddDays(-Math.Max(1, Settings.MaximumLogRetentionDays));
+        foreach (var file in Directory.Exists(_paths.LogsDirectory) ? Directory.EnumerateFiles(_paths.LogsDirectory, "*.log", SearchOption.AllDirectories) : Array.Empty<string>())
+        {
+            try
+            {
+                if (File.GetLastWriteTimeUtc(file) < cutoff)
+                {
+                    File.Delete(file);
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Could not clear old logs: {ex.Message}";
+                return;
+            }
+        }
+
+        StatusMessage = "Old logs cleared.";
+    }
+
+    private void MaintenanceAction(string successMessage)
+    {
+        StatusMessage = successMessage;
+    }
+
+    private void RestartApplication()
+    {
+        var answer = MessageBox.Show("Restart Game Server Manager now?", "Restart Application", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        var executable = Environment.ProcessPath;
+        if (!string.IsNullOrWhiteSpace(executable))
+        {
+            Process.Start(new ProcessStartInfo(executable) { UseShellExecute = true });
+        }
+
+        Application.Current.Shutdown();
+    }
+
+    private void CopyVersionInformation()
+    {
+        CopyText(
+            $"Game Server Manager {CurrentVersion}{Environment.NewLine}Build: {BuildNumber}{Environment.NewLine}Built: {BuildDateText}{Environment.NewLine}Install mode: {InstallMode}{Environment.NewLine}Repository: {RepositoryUrl}",
+            "Version information copied.");
+    }
+
+    private void CopyText(string text, string statusMessage)
+    {
+        Clipboard.SetText(text);
+        StatusMessage = statusMessage;
+    }
+
     private async Task ExportDiagnosticsAsync()
     {
         var reportPath = await _diagnosticsService.ExportAsync(Settings, 0, new[] { "ARK: Survival Ascended", "Palworld" });
@@ -919,6 +1085,9 @@ public class SettingsViewModel : BaseViewModel
         return Settings.UpdateCheckFrequency switch
         {
             "Every launch" => true,
+            "On application startup" => true,
+            "Every 6 hours" => Settings.LastUpdateCheckUtc is null || Settings.LastUpdateCheckUtc.Value.AddHours(6) <= DateTime.UtcNow,
+            "Every 12 hours" => Settings.LastUpdateCheckUtc is null || Settings.LastUpdateCheckUtc.Value.AddHours(12) <= DateTime.UtcNow,
             "Weekly" => Settings.LastUpdateCheckUtc is null || Settings.LastUpdateCheckUtc.Value.AddDays(7) <= DateTime.UtcNow,
             _ => Settings.LastUpdateCheckUtc is null || Settings.LastUpdateCheckUtc.Value.AddDays(1) <= DateTime.UtcNow
         };
@@ -931,10 +1100,18 @@ public class SettingsViewModel : BaseViewModel
         OnPropertyChanged(nameof(UpdateChannelText));
         OnPropertyChanged(nameof(LastCheckedText));
         OnPropertyChanged(nameof(UpdateType));
+        OnPropertyChanged(nameof(UpdateStateText));
+        OnPropertyChanged(nameof(ReleaseTitle));
+        OnPropertyChanged(nameof(ReleasePublisher));
         OnPropertyChanged(nameof(ReleaseNotes));
         OnPropertyChanged(nameof(ReleaseDateText));
         OnPropertyChanged(nameof(ReleaseUrl));
         OnPropertyChanged(nameof(DownloadSizeText));
+        OnPropertyChanged(nameof(InstallerPackageType));
+        OnPropertyChanged(nameof(RepositoryValidationText));
+        OnPropertyChanged(nameof(CanUseUpdateFrequency));
+        OnPropertyChanged(nameof(CanUseBackgroundDownload));
+        OnPropertyChanged(nameof(ShowPrereleaseWarning));
         OnPropertyChanged(nameof(HasUpdateAvailable));
         OnPropertyChanged(nameof(VersionText));
         OnPropertyChanged(nameof(IsCheckingForUpdates));

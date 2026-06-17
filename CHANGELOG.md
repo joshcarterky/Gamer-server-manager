@@ -12,6 +12,25 @@ This project follows semantic versioning.
 
 ### Fixed
 
+## [3.0.8] - 2026-06-17
+
+### Added
+
+- Added a Settings regression test that verifies the Advanced page no longer exposes update commands or release status fields.
+- Added persisted preferences for ask-before-download, update notifications, background downloads, opening release notes after update, verbose startup logging, service diagnostics, and log retention limits.
+
+### Changed
+
+- Rebuilt Settings > Updates as the authoritative client-update center with overview, actions, automatic update behavior, release channel, release information, update history, and advanced update source sections.
+- Reworked Settings > Advanced into diagnostics, logging, troubleshooting, and About sections only.
+- Improved settings navigation styling so selected, hover, keyboard focus, and disabled states are distinct.
+- Updated update display fallbacks to use clearer professional text such as "Not checked yet" and "Not provided by release."
+
+### Fixed
+
+- Removed duplicated update buttons, release status, latest-version fields, download/install controls, and progress indicators from Settings > Advanced.
+- Fixed automatic update download behavior to respect the ask-before-download preference.
+
 ## [3.0.3] - 2026-06-16
 
 ### Changed
