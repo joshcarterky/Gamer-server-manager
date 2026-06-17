@@ -474,6 +474,24 @@ static void TestArkSettingsRedesignContracts()
     Assert(xaml.Contains("Server Overview", StringComparison.Ordinal), "ARK settings UI should include a designed overview page.");
     Assert(xaml.Contains("BooleanValue", StringComparison.Ordinal), "ARK settings UI should bind boolean settings to a checkbox editor.");
     Assert(!xaml.Contains("ItemsSource=\"{Binding Tabs}\" SelectedItem=\"{Binding SelectedTab}\"", StringComparison.Ordinal), "ARK settings navigation should not use the old flat tab list.");
+    Assert(!xaml.Contains("Launch Command Preview", StringComparison.Ordinal), "Launch command preview must not be rendered as a global panel.");
+    Assert(!xaml.Contains("SteamCMD Install / Update", StringComparison.Ordinal), "SteamCMD command must not be rendered as a global panel.");
+    Assert(!xaml.Contains("Text=\"Current vs Pending Config\"", StringComparison.Ordinal), "Old global configuration diff panel must not be rendered.");
+    Assert(xaml.Contains("Visibility=\"{Binding IsHealthValidationTab", StringComparison.Ordinal), "Health and Validation should own the diff page.");
+    Assert(xaml.Contains("Visibility=\"{Binding IsInstallUpdateTab", StringComparison.Ordinal), "Install / Update should own SteamCMD install content.");
+    Assert(xaml.Contains("Visibility=\"{Binding IsStartupTab", StringComparison.Ordinal), "Startup should own launch command content.");
+    Assert(xaml.Contains("Visibility=\"{Binding IsRawEditorTab", StringComparison.Ordinal), "Raw INI Editor should own raw file editors.");
+    Assert(xaml.Contains("Header=\"Technical Command Preview\"", StringComparison.Ordinal), "SteamCMD command preview should be collapsed by default.");
+    Assert(xaml.Contains("Header=\"View Generated Command\"", StringComparison.Ordinal), "Launch command preview should be collapsed by default.");
+    Assert(xaml.Contains("RawGameUserSettingsEditorText", StringComparison.Ordinal), "Raw editor should bind through masked editor text.");
+    Assert(xaml.Contains("GroupName=\"ArkSettingsMode\"", StringComparison.Ordinal), "Basic and Advanced mode should use one segmented radio group.");
+    Assert(!xaml.Contains("CheckBox Content=\"Advanced\"", StringComparison.Ordinal), "Advanced mode should not be a checkbox.");
+
+    var viewModelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "GameServerManager.App", "ViewModels", "ArkAsaSettingsViewModel.cs"));
+    var viewModel = File.ReadAllText(viewModelPath);
+    Assert(viewModel.Contains("RevealSensitiveRawValues = false", StringComparison.Ordinal), "Raw sensitive values should remask when leaving Raw INI Editor.");
+    Assert(viewModel.Contains("MaskedCommandPreview", StringComparison.Ordinal), "Command previews should expose a masked display value.");
+    Assert(viewModel.Contains("MatchingSettingsText", StringComparison.Ordinal), "Navigation count should distinguish available settings from search matches.");
 }
 
 static void TestDiagnosticsMaskSecrets()

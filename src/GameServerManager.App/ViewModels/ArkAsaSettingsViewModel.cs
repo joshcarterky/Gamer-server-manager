@@ -28,6 +28,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
     private readonly string? _requestedProfileId;
     private int _validationErrorCount;
     private int _validationWarningCount;
+    private bool _revealSensitiveRawValues;
 
     public ArkAsaSettingsViewModel(ServerProfile? profile = null)
     {
@@ -128,6 +129,30 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         }
     }
 
+    public bool IsBasicMode
+    {
+        get => !ShowAdvanced;
+        set
+        {
+            if (value)
+            {
+                ShowAdvanced = false;
+            }
+        }
+    }
+
+    public bool IsAdvancedMode
+    {
+        get => ShowAdvanced;
+        set
+        {
+            if (value)
+            {
+                ShowAdvanced = true;
+            }
+        }
+    }
+
     public string SelectedTab
     {
         get => _selectedTab;
@@ -139,28 +164,38 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
                 OnPropertyChanged(nameof(IsClusterTab));
                 OnPropertyChanged(nameof(IsModsTab));
                 OnPropertyChanged(nameof(IsOverviewTab));
+                OnPropertyChanged(nameof(IsHealthValidationTab));
+                OnPropertyChanged(nameof(IsInstallUpdateTab));
+                OnPropertyChanged(nameof(IsStartupTab));
                 OnPropertyChanged(nameof(IsRawEditorTab));
                 OnPropertyChanged(nameof(IsSettingsTab));
                 OnPropertyChanged(nameof(CategoryDescription));
+                if (!IsRawEditorTab)
+                {
+                    RevealSensitiveRawValues = false;
+                }
                 RefreshNavigationState();
             }
         }
     }
 
     public bool IsOverviewTab => SelectedTab.Equals("Overview", StringComparison.OrdinalIgnoreCase);
+    public bool IsHealthValidationTab => SelectedTab.Equals("Health and Validation", StringComparison.OrdinalIgnoreCase);
+    public bool IsInstallUpdateTab => SelectedTab.Equals("Install / Update", StringComparison.OrdinalIgnoreCase);
+    public bool IsStartupTab => SelectedTab.Equals("Startup", StringComparison.OrdinalIgnoreCase);
     public bool IsClusterTab => SelectedTab.Equals("Cluster", StringComparison.OrdinalIgnoreCase);
     public bool IsModsTab => SelectedTab.Equals("Mods", StringComparison.OrdinalIgnoreCase);
     public bool IsRawEditorTab => SelectedTab.Equals("Raw INI Editor", StringComparison.OrdinalIgnoreCase);
-    public bool IsSettingsTab => !IsOverviewTab && !IsClusterTab && !IsModsTab && !IsRawEditorTab;
-    public bool IsBasicMode => !ShowAdvanced;
-    public bool IsAdvancedMode => ShowAdvanced;
+    public bool IsSettingsTab => !IsOverviewTab && !IsHealthValidationTab && !IsInstallUpdateTab && !IsStartupTab && !IsClusterTab && !IsModsTab && !IsRawEditorTab;
     public string ModeDescription => ShowAdvanced
         ? "Full configuration access for experienced ARK administrators."
         : "Recommended settings for most ARK servers.";
     public string CategoryDescription => SelectedTab switch
     {
         "Overview" => "Quick status, configuration health, and the most common ARK server settings.",
-        "Install / Update" => "Install path, SteamCMD arguments, executable status, and update workflow entry points.",
+        "Health and Validation" => "Validation results, restart requirements, and structured current-vs-pending changes.",
+        "Install / Update" => "SteamCMD installation, server build status, update checks, and validation actions.",
+        "Startup" => "Startup behavior, launch options, crash recovery, and generated command validation.",
         "Network / Ports" => "Game, query, and RCON port configuration with local conflict guidance.",
         "Admin / Passwords" => "Sensitive access settings. Password values are masked in previews and diagnostics.",
         "Rates" => "Experience, taming, harvesting, difficulty, and other server pace multipliers.",
@@ -220,6 +255,11 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
                 OnPropertyChanged(nameof(SteamCmdArguments));
                 OnPropertyChanged(nameof(GameUserSettingsPath));
                 OnPropertyChanged(nameof(GameIniPath));
+                OnPropertyChanged(nameof(InstallDirectory));
+                OnPropertyChanged(nameof(SteamCmdStatus));
+                OnPropertyChanged(nameof(InstallationStatus));
+                OnPropertyChanged(nameof(ServerExecutablePath));
+                OnPropertyChanged(nameof(WorkingDirectory));
                 NotifyCommandChanged();
                 RefreshChangeState();
             }
@@ -260,9 +300,56 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         get => _validationWarningCount;
         private set => SetProperty(ref _validationWarningCount, value);
     }
+    public string MatchingSettingsText => string.IsNullOrWhiteSpace(SearchText)
+        ? $"{VisibleSettingsCount} available settings"
+        : $"{VisibleSettingsCount} matching settings";
     public string SteamCmdArguments => new ArkAsaSteamCmdService().BuildInstallOrUpdateArguments(_profile.Basic.InstallPath);
     public string CommandPreview => _launchBuilder.Build(_profile).CommandLine;
+    public string MaskedCommandPreview => MaskSecrets(CommandPreview);
     public string DiffPreview => BuildPendingSummary();
+    public string InstallDirectory => _profile.Basic.InstallPath;
+    public string SteamCmdStatus => Directory.Exists(_profile.Basic.InstallPath) ? "Install directory ready" : "Install directory missing";
+    public string InstallationStatus => File.Exists(_profile.Paths.ExecutablePath) ? "Installed" : "Not installed";
+    public string LastUpdatedText => "Not checked";
+    public string StartupDelayText => "0 seconds";
+    public string StartupTimeoutText => "120 seconds";
+    public string GracefulShutdownTimeoutText => "30 seconds";
+    public string ServerExecutablePath => _profile.Paths.ExecutablePath;
+    public string WorkingDirectory => _profile.Basic.InstallPath;
+    public bool RevealSensitiveRawValues
+    {
+        get => _revealSensitiveRawValues;
+        set
+        {
+            if (SetProperty(ref _revealSensitiveRawValues, value))
+            {
+                OnPropertyChanged(nameof(RawGameUserSettingsEditorText));
+                OnPropertyChanged(nameof(RawGameIniEditorText));
+            }
+        }
+    }
+    public string RawGameUserSettingsEditorText
+    {
+        get => RevealSensitiveRawValues ? RawGameUserSettings : MaskSecrets(RawGameUserSettings);
+        set
+        {
+            if (RevealSensitiveRawValues)
+            {
+                RawGameUserSettings = value;
+            }
+        }
+    }
+    public string RawGameIniEditorText
+    {
+        get => RevealSensitiveRawValues ? RawGameIni : MaskSecrets(RawGameIni);
+        set
+        {
+            if (RevealSensitiveRawValues)
+            {
+                RawGameIni = value;
+            }
+        }
+    }
 
     public string RawGameUserSettings
     {
@@ -271,6 +358,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         {
             if (SetProperty(ref _rawGameUserSettings, value))
             {
+                OnPropertyChanged(nameof(RawGameUserSettingsEditorText));
                 RefreshChangeState();
             }
         }
@@ -283,6 +371,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         {
             if (SetProperty(ref _rawGameIni, value))
             {
+                OnPropertyChanged(nameof(RawGameIniEditorText));
                 RefreshChangeState();
             }
         }
@@ -441,6 +530,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         }
 
         OnPropertyChanged(nameof(VisibleSettingsCount));
+        OnPropertyChanged(nameof(MatchingSettingsText));
         RefreshNavigationState();
     }
 
@@ -470,12 +560,14 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         OnPropertyChanged(nameof(QueryPort));
         OnPropertyChanged(nameof(RconPort));
         OnPropertyChanged(nameof(SteamCmdArguments));
+        OnPropertyChanged(nameof(MaskedCommandPreview));
         NotifyCommandChanged();
     }
 
     private void NotifyCommandChanged()
     {
         OnPropertyChanged(nameof(CommandPreview));
+        OnPropertyChanged(nameof(MaskedCommandPreview));
         OnPropertyChanged(nameof(DiffPreview));
     }
 
@@ -519,6 +611,42 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         OnPropertyChanged(nameof(UnsavedChangesText));
         OnPropertyChanged(nameof(DiffPreview));
         RefreshNavigationState();
+    }
+
+    private static string MaskSecrets(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return value;
+        }
+
+        var keys = new[]
+        {
+            "ServerAdminPassword",
+            "ServerPassword",
+            "RCONPassword",
+            "RCONServerPassword",
+            "AdminPassword",
+            "Password",
+            "ApiKey",
+            "Token",
+            "Secret"
+        };
+
+        var masked = value;
+        foreach (var key in keys)
+        {
+            masked = System.Text.RegularExpressions.Regex.Replace(
+                masked,
+                $@"(?im)({System.Text.RegularExpressions.Regex.Escape(key)}\s*=\s*)(""[^""]*""|[^\s\r\n?&]+)",
+                "$1********");
+            masked = System.Text.RegularExpressions.Regex.Replace(
+                masked,
+                $@"(?im)({System.Text.RegularExpressions.Regex.Escape(key)}\s*[:]\s*)(""[^""]*""|[^\s\r\n,}}]+)",
+                "$1********");
+        }
+
+        return masked;
     }
 
     private void ValidateCurrentProfile()

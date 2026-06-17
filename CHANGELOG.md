@@ -12,6 +12,26 @@ This project follows semantic versioning.
 
 ### Fixed
 
+## [3.1.0] - 2026-06-17
+
+### Added
+
+- Added dedicated ARK ASA category content for Health and Validation, Install / Update, Startup, and Raw INI Editor.
+- Added regression coverage for ARK selected-category rendering, collapsed technical previews, masked raw editor bindings, and Basic/Advanced mode selection.
+
+### Changed
+
+- ARK ASA Basic and Advanced mode selection now uses one mutually exclusive radio group.
+- ARK ASA navigation count now says "available settings" unless search is active.
+- Raw INI editing is now isolated under Advanced > Raw INI Editor with file tabs and masked sensitive display by default.
+
+### Fixed
+
+- Fixed ARK ASA technical panels being rendered beneath every selected category.
+- Moved SteamCMD command preview to Install / Update, launch command preview to Startup, configuration diff to Health and Validation, and full INI editors to Raw INI Editor.
+- Masked sensitive ARK values in command previews, configuration diffs, and raw INI editor display unless reveal is explicitly enabled.
+- Raw sensitive values now re-mask automatically when leaving Raw INI Editor.
+
 ## [3.0.9] - 2026-06-17
 
 ### Added

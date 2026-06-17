@@ -1,5 +1,28 @@
 # Release Notes
 
+## v3.1.0
+
+## Added
+
+- **ARK ASA selected-category content host** - Overview, Health and Validation, Install / Update, Startup, normal settings categories, Mods, Cluster, and Raw INI Editor now render through explicit selected-category ownership.
+- **Dedicated Raw INI Editor** - raw `GameUserSettings.ini`, `Game.ini`, launch arguments, generated configuration, and file comparison now live under Raw INI Editor tabs.
+- **Regression coverage** - tests now guard against the technical panels returning as global content.
+
+## Changed
+
+- SteamCMD details now live under Install / Update behind a collapsed **Technical Command Preview** section.
+- Generated launch command details now live under Startup behind a collapsed **View Generated Command** section.
+- Current-vs-pending configuration diff now lives under Health and Validation.
+- Basic and Advanced mode now use one mutually exclusive selector.
+- The navigation count says "available settings" until search is active.
+
+## Fixed
+
+- Fixed the ARK ASA bug where SteamCMD, launch command, configuration diff, and full INI panels appeared under every category.
+- Sensitive ARK values are masked in previews and raw editor display by default, and raw values are re-masked when leaving Raw INI Editor.
+
+---
+
 ## v3.0.9
 
 ## Added
