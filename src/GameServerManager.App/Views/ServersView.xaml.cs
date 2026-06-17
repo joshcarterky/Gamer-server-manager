@@ -17,11 +17,5 @@ namespace GameServerManager.App.Views
             if (sender is FrameworkElement element && element.ContextMenu != null)
                 element.ContextMenu.IsOpen = true;
         }
-
-        private void OnMoreMenuClick(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement element && element.ContextMenu != null)
-                element.ContextMenu.IsOpen = true;
-        }
     }
 }

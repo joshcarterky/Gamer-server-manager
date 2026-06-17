@@ -228,6 +228,10 @@ public class ServerCardViewModel : BaseViewModel
                 OnPropertyChanged(nameof(PlayersDisplayText));
                 OnPropertyChanged(nameof(WarningBadges));
                 OnPropertyChanged(nameof(HasWarnings));
+                OnPropertyChanged(nameof(InstallButtonLabel));
+                OnPropertyChanged(nameof(InstallButtonTooltip));
+                OnPropertyChanged(nameof(IsInstallButtonEnabled));
+                OnPropertyChanged(nameof(IsServerInstalled));
             }
         }
     }
@@ -296,6 +300,26 @@ public class ServerCardViewModel : BaseViewModel
     public bool CanStart => Status is not (ServerStatus.Running or ServerStatus.Starting or ServerStatus.Updating or ServerStatus.Restarting or ServerStatus.Stopping) && !IsBusy;
     public bool CanStop => Status == ServerStatus.Running;
 
+    // ── Install button state ──────────────────────────────────────────────────
+    public bool IsServerInstalled =>
+        !string.IsNullOrWhiteSpace(Profile.InstallPath) &&
+        !string.IsNullOrWhiteSpace(Provider.ExecutableRelativePath) &&
+        File.Exists(Path.Combine(Profile.InstallPath, Provider.ExecutableRelativePath));
+
+    public string InstallButtonLabel => Status == ServerStatus.Updating
+        ? "Updating…"
+        : IsServerInstalled ? "Install / Update" : "Install";
+
+    public string InstallButtonTooltip => Status == ServerStatus.Updating
+        ? "An installation operation is already running"
+        : IsServerInstalled
+            ? "Update or repair this server's installed files via SteamCMD"
+            : "Install the dedicated server files via SteamCMD";
+
+    public bool IsInstallButtonEnabled =>
+        Status is not (ServerStatus.Updating or ServerStatus.Starting or ServerStatus.Stopping or ServerStatus.Restarting) &&
+        !IsBusy;
+
     // ── Warnings ─────────────────────────────────────────────────────────────
     public IReadOnlyList<string> WarningBadges => BuildWarningBadges();
     public bool HasWarnings => WarningBadges.Count > 0;
@@ -337,6 +361,7 @@ public class ServerCardViewModel : BaseViewModel
         BusyText = text;
         IsBusy = !string.IsNullOrWhiteSpace(text);
         OnPropertyChanged(nameof(CanStart));
+        OnPropertyChanged(nameof(IsInstallButtonEnabled));
     }
 
     public void RefreshStatus()
@@ -385,6 +410,9 @@ public class ServerCardViewModel : BaseViewModel
         OnPropertyChanged(nameof(HasWarnings));
         OnPropertyChanged(nameof(HasCluster));
         OnPropertyChanged(nameof(ClusterBadge));
+        OnPropertyChanged(nameof(IsServerInstalled));
+        OnPropertyChanged(nameof(InstallButtonLabel));
+        OnPropertyChanged(nameof(InstallButtonTooltip));
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

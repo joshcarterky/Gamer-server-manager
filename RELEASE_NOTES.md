@@ -1,5 +1,15 @@
 # Release Notes
 
+## v3.3.1
+
+## Changed
+
+- **Server tile action bar** — replaced the white overflow/context menus with a permanent full-width action bar on every server card. All actions are now direct visible buttons: **Edit Profile**, **Console Log**, **Backup Now**, **Open Folder**, **Details**, **Settings** (MANAGEMENT group) and **More Options**, **Delete Server** (ADVANCED group). Each button has a coloured icon badge matching the mockup design.
+- **Primary power controls** — the Start / Stop + dropdown (▾) and Install / Update buttons are now stacked vertically in the top-right of the card for a cleaner, more intentional hierarchy. Stop and Restart remain accessible via the power dropdown.
+- **Delete Server styling** — red-accented button with trash icon, visually separated from management actions, still protected by confirmation dialog.
+
+---
+
 ## v3.3.0
 
 ## Added

@@ -94,6 +94,50 @@
             <Setter Property="BorderBrush" Value="#1E3347"/>
         </Style>
 
+        <Style x:Key="BtnInstall" TargetType="Button" BasedOn="{StaticResource BtnBase}">
+            <Setter Property="Background" Value="#0C1E38"/>
+            <Setter Property="BorderBrush" Value="#1A4070"/>
+            <Setter Property="Foreground" Value="#6AAEE0"/>
+        </Style>
+
+        <Style x:Key="BtnStop" TargetType="Button" BasedOn="{StaticResource BtnBase}">
+            <Setter Property="Background" Value="#381010"/>
+            <Setter Property="BorderBrush" Value="#6A2020"/>
+            <Setter Property="Foreground" Value="#FF8888"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <Style x:Key="BtnRestart" TargetType="Button" BasedOn="{StaticResource BtnBase}">
+            <Setter Property="Background" Value="#0E1E38"/>
+            <Setter Property="BorderBrush" Value="#1E4070"/>
+            <Setter Property="Foreground" Value="#60B0F0"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <Style x:Key="BtnAction" TargetType="Button" BasedOn="{StaticResource BtnBase}">
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+
+        <Style x:Key="BtnDanger" TargetType="Button" BasedOn="{StaticResource BtnBase}">
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Background" Value="#2C0A0A"/>
+            <Setter Property="BorderBrush" Value="#6A1C1C"/>
+            <Setter Property="Foreground" Value="#FF7070"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <Style x:Key="BtnActionBar" TargetType="Button" BasedOn="{StaticResource BtnBase}">
+            <Setter Property="Background" Value="#0C1828"/>
+            <Setter Property="BorderBrush" Value="#182A3C"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
         <!-- ═══ Input styles ════════════════════════════════════════════════ -->
         <Style x:Key="SearchBox" TargetType="TextBox">
             <Setter Property="Background" Value="#0C1726"/>
@@ -684,35 +728,40 @@
                                                              Visibility="{Binding HasRamLimit, Converter={StaticResource BoolToVis}}"/>
                                             </StackPanel>
 
-                                            <!-- Col 5: Actions -->
-                                            <StackPanel Grid.Column="5" VerticalAlignment="Center">
-                                                <!-- Row 1: Primary + Power dropdown -->
-                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                                    <!-- Start (when stopped) -->
+                                            <!-- Col 5: Primary power controls -->
+                                            <StackPanel Grid.Column="5" VerticalAlignment="Center" MinWidth="210">
+
+                                                <!-- Power row: primary button + dropdown -->
+                                                <Grid Margin="0,0,0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <!-- Start (stopped/idle) -->
                                                     <Button Content="▶  Start"
                                                             Command="{Binding DataContext.StartCommand, ElementName=ServersViewRoot}"
                                                             CommandParameter="{Binding}"
                                                             IsEnabled="{Binding CanStart, Mode=OneWay}"
                                                             Style="{StaticResource BtnSuccess}"
-                                                            Padding="14,0" Height="30" MinWidth="90"
+                                                            Padding="14,0" Height="36"
                                                             Visibility="{Binding IsPrimaryStart, Converter={StaticResource BoolToVis}}"
                                                             ToolTip="Start this server"/>
-                                                    <!-- Console (when running) -->
-                                                    <Button Content=">_  Console"
-                                                            Command="{Binding DataContext.ViewConsoleCommand, ElementName=ServersViewRoot}"
+                                                    <!-- Stop (running) -->
+                                                    <Button Content="■  Stop"
+                                                            Command="{Binding DataContext.StopCommand, ElementName=ServersViewRoot}"
                                                             CommandParameter="{Binding}"
-                                                            Style="{StaticResource BtnConsole}"
-                                                            Padding="14,0" Height="30" MinWidth="90"
+                                                            Style="{StaticResource BtnStop}"
+                                                            Padding="14,0" Height="36"
                                                             Visibility="{Binding IsRunning, Converter={StaticResource BoolToVis}}"
-                                                            ToolTip="Open console log"/>
-                                                    <!-- Power dropdown arrow -->
-                                                    <Button Content="▾"
+                                                            ToolTip="Stop this server"/>
+                                                    <!-- Power dropdown -->
+                                                    <Button Grid.Column="1" Content="▾"
                                                             Style="{StaticResource BtnPower}"
-                                                            Height="30" Width="26" Margin="3,0,0,0"
+                                                            Height="36" Width="32" Margin="4,0,0,0"
                                                             Click="OnPowerMenuClick"
                                                             Tag="{Binding DataContext, ElementName=ServersViewRoot}"
                                                             ContextMenuService.Placement="Bottom"
-                                                            ToolTip="Server power options">
+                                                            ToolTip="Power options">
                                                         <Button.ContextMenu>
                                                             <ContextMenu>
                                                                 <MenuItem Header="▶  Start"
@@ -727,69 +776,138 @@
                                                             </ContextMenu>
                                                         </Button.ContextMenu>
                                                     </Button>
-                                                </StackPanel>
-                                                <!-- Row 2: Quick icon buttons + More menu -->
-                                                <StackPanel Orientation="Horizontal">
-                                                    <Button Content="⚙"
-                                                            Style="{StaticResource BtnIcon}"
-                                                            Height="28" Width="28" FontSize="13"
-                                                            Margin="0,0,4,0"
-                                                            ToolTip="Server settings"
-                                                            Command="{Binding DataContext.OpenSettingsCommand, ElementName=ServersViewRoot}"
-                                                            CommandParameter="{Binding}"/>
-                                                    <Button Content="📁"
-                                                            Style="{StaticResource BtnIcon}"
-                                                            Height="28" Width="28" FontSize="13"
-                                                            Margin="0,0,4,0"
-                                                            ToolTip="Open server files"
-                                                            Command="{Binding DataContext.OpenFilesCommand, ElementName=ServersViewRoot}"
-                                                            CommandParameter="{Binding}"/>
-                                                    <Button Content="{Binding ExpandText, Mode=OneWay}"
-                                                            Style="{StaticResource BtnBase}"
-                                                            Height="28" Padding="8,0" FontSize="11"
-                                                            Margin="0,0,4,0"
-                                                            ToolTip="Expand server details"
-                                                            Command="{Binding DataContext.ToggleCardCommand, ElementName=ServersViewRoot}"
-                                                            CommandParameter="{Binding}"/>
-                                                    <!-- More menu -->
-                                                    <Button Content="⋯"
-                                                            Style="{StaticResource BtnIcon}"
-                                                            Height="28" Width="28" FontSize="16"
-                                                            Click="OnMoreMenuClick"
-                                                            Tag="{Binding DataContext, ElementName=ServersViewRoot}"
-                                                            ContextMenuService.Placement="Bottom"
-                                                            ToolTip="More options">
-                                                        <Button.ContextMenu>
-                                                            <ContextMenu>
-                                                                <MenuItem Header="Edit profile"
-                                                                          Command="{Binding PlacementTarget.Tag.EditCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-                                                                <MenuItem Header="Console log"
-                                                                          Command="{Binding PlacementTarget.Tag.ViewConsoleCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-                                                                <MenuItem Header="Backup now"
-                                                                          Command="{Binding PlacementTarget.Tag.BackupNowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-                                                                <MenuItem Header="Install / Update"
-                                                                          Command="{Binding PlacementTarget.Tag.UpdateServerCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-                                                                <MenuItem Header="Open folder"
-                                                                          Command="{Binding PlacementTarget.Tag.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-                                                                <Separator Style="{StaticResource MenuSep}"/>
-                                                                <MenuItem Header="More options"
-                                                                          Command="{Binding PlacementTarget.Tag.MoreOptionsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-                                                                <Separator Style="{StaticResource MenuSep}"/>
-                                                                <MenuItem Header="Delete server" Foreground="#E05050"
-                                                                          Command="{Binding PlacementTarget.Tag.DeleteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-                                                            </ContextMenu>
-                                                        </Button.ContextMenu>
-                                                    </Button>
-                                                </StackPanel>
+                                                </Grid>
+
+                                                <!-- Install / Update row -->
+                                                <Button Command="{Binding DataContext.UpdateServerCommand, ElementName=ServersViewRoot}"
+                                                        CommandParameter="{Binding}"
+                                                        IsEnabled="{Binding IsInstallButtonEnabled, Mode=OneWay}"
+                                                        Style="{StaticResource BtnInstall}"
+                                                        Height="32"
+                                                        ToolTip="{Binding InstallButtonTooltip, Mode=OneWay}">
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock Text="⬇  " FontSize="12" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{Binding InstallButtonLabel, Mode=OneWay}" FontSize="12" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+
                                             </StackPanel>
                                         </Grid>
+
+                                        <!-- ── Action bar (always visible) ──────────── -->
+                                        <Border Background="#091320" BorderBrush="#1A2E42" BorderThickness="0,1,0,0" Padding="14,9">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- MANAGEMENT group (left) -->
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Text="MANAGEMENT" Style="{StaticResource LabelText}"
+                                                               VerticalAlignment="Center" Margin="0,0,14,0"/>
+                                                    <!-- Edit Profile -->
+                                                    <Button Style="{StaticResource BtnActionBar}" Margin="0,0,6,0"
+                                                            Command="{Binding DataContext.EditCommand, ElementName=ServersViewRoot}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip="Edit server profile">
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <Border Width="22" Height="22" CornerRadius="5" Background="#101E50" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="✎" Foreground="#6A8AFF" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                            <TextBlock Text="Edit Profile" Foreground="#C8DCEA" FontSize="12" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <!-- Console Log -->
+                                                    <Button Style="{StaticResource BtnActionBar}" Margin="0,0,6,0"
+                                                            Command="{Binding DataContext.ViewConsoleCommand, ElementName=ServersViewRoot}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip="View server console log">
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <Border Width="22" Height="22" CornerRadius="5" Background="#081E12" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                                <TextBlock Text=">_" Foreground="#3ACA70" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                            <TextBlock Text="Console Log" Foreground="#C8DCEA" FontSize="12" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <!-- Backup Now -->
+                                                    <Button Style="{StaticResource BtnActionBar}" Margin="0,0,6,0"
+                                                            Command="{Binding DataContext.BackupNowCommand, ElementName=ServersViewRoot}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip="Create a backup now">
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <Border Width="22" Height="22" CornerRadius="5" Background="#180C30" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="◈" Foreground="#9060F0" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                            <TextBlock Text="Backup Now" Foreground="#C8DCEA" FontSize="12" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <!-- Open Folder -->
+                                                    <Button Style="{StaticResource BtnActionBar}" Margin="0,0,6,0"
+                                                            Command="{Binding DataContext.OpenFolderCommand, ElementName=ServersViewRoot}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip="Open server install folder">
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <Border Width="22" Height="22" CornerRadius="5" Background="#201408" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="📁" Foreground="#C09030" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                            <TextBlock Text="Open Folder" Foreground="#C8DCEA" FontSize="12" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <!-- Details / Collapse -->
+                                                    <Button Style="{StaticResource BtnActionBar}" Margin="0,0,6,0"
+                                                            Command="{Binding DataContext.ToggleCardCommand, ElementName=ServersViewRoot}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip="Toggle server details panel">
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <Border Width="22" Height="22" CornerRadius="5" Background="#061A24" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="ℹ" Foreground="#30B0C8" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                            <TextBlock Text="{Binding ExpandText, Mode=OneWay}" Foreground="#C8DCEA" FontSize="12" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <!-- Settings -->
+                                                    <Button Style="{StaticResource BtnActionBar}"
+                                                            Command="{Binding DataContext.OpenSettingsCommand, ElementName=ServersViewRoot}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip="Server settings">
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <Border Width="22" Height="22" CornerRadius="5" Background="#0E1A28" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="⚙" Foreground="#6090A8" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                            <TextBlock Text="Settings" Foreground="#C8DCEA" FontSize="12" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                </StackPanel>
+
+                                                <!-- ADVANCED group (right) -->
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Text="ADVANCED" Style="{StaticResource LabelText}"
+                                                               VerticalAlignment="Center" Margin="0,0,14,0"/>
+                                                    <!-- More Options -->
+                                                    <Button Style="{StaticResource BtnActionBar}" Margin="0,0,6,0"
+                                                            Command="{Binding DataContext.MoreOptionsCommand, ElementName=ServersViewRoot}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip="More options">
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <TextBlock Text="···  " Foreground="#6A85A0" FontSize="14" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="More Options" Foreground="#C8DCEA" FontSize="12" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <!-- Delete Server -->
+                                                    <Button Style="{StaticResource BtnDanger}"
+                                                            Command="{Binding DataContext.DeleteCommand, ElementName=ServersViewRoot}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip="Delete this server (requires confirmation)">
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <TextBlock Text="🗑  " Foreground="#FF7070" FontSize="13" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="Delete Server" Foreground="#FF7070" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                </StackPanel>
+
+                                            </Grid>
+                                        </Border>
 
                                         <!-- ── Expandable details drawer ──────────── -->
                                         <Border Style="{StaticResource DrawerPanel}"

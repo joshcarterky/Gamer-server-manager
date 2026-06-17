@@ -776,9 +776,16 @@ public class ServersViewModel : BaseViewModel, IDisposable
     {
         if (server == null) return;
 
+        Debug.WriteLine("[ServersPage] Install/Update button clicked");
+        Debug.WriteLine($"[InstallUpdate] ServerId={server.Profile.Id}");
+        Debug.WriteLine($"[InstallUpdate] ServerName={server.ServerName}");
+        Debug.WriteLine($"[InstallUpdate] Game={server.Profile.GameId}");
+        Debug.WriteLine($"[InstallUpdate] InstallPath={server.Profile.InstallPath}");
+
         if (_installService.IsOperationActive(server.Profile.Id))
         {
             Message = $"Install or update already in progress for {server.ServerName}.";
+            Debug.WriteLine($"[InstallUpdate] Blocked — operation already active for {server.Profile.Id}");
             return;
         }
 
@@ -811,6 +818,9 @@ public class ServersViewModel : BaseViewModel, IDisposable
         if (IsInstallRunning || _installTarget == null) return;
 
         var server = _installTarget;
+        var mode = IsInstallFirstTime ? "Install" : "Update";
+        Debug.WriteLine($"[InstallUpdate] Mode={mode}");
+        Debug.WriteLine($"[InstallUpdate] Operation started");
 
         if (server.Status == ServerStatus.Running)
         {
@@ -866,6 +876,8 @@ public class ServersViewModel : BaseViewModel, IDisposable
                 progress,
                 _installCts.Token);
 
+            Debug.WriteLine($"[InstallUpdate] Installer exited — Success={result.Success}, Cancelled={result.Cancelled}");
+            Debug.WriteLine(result.Success ? "[InstallUpdate] Operation completed" : "[InstallUpdate] Operation failed");
             InstallResultMessage = result.Message;
             InstallLogPath = result.LogPath;
             SetInstallPanelState(open: true, running: false, complete: true, success: result.Success);
