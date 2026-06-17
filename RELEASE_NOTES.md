@@ -1,5 +1,21 @@
 # Release Notes
 
+## v3.2.1
+
+## Changed
+
+- **Servers page redesigned** — replaced the plain server table with a professional card-based layout featuring summary stat cards (Total Servers, Online, Active Players, Needs Attention, Showing), a search/filter toolbar, and per-server cards with game identity tiles, colour-coded status badges, Players/CPU/RAM metric columns (showing `—` when the server is stopped), and an expandable details drawer.
+- **Action hierarchy on server cards** — primary Start / Console button, icon buttons for Settings and Files, a `▾` power dropdown (Start / Stop / Restart), and a `⋯` overflow menu (Edit, Console log, Backup now, Install/Update, Open folder, Delete). Delete is now in the overflow menu only and still requires confirmation.
+- **ARK cluster badge** — server cards for ARK: Survival Ascended show a cluster ID badge when clustering is enabled.
+- **Game identity tiles** — each card shows coloured two-letter initials on a game-specific tinted background (orange for ARK, teal for Palworld, etc.).
+- **Context menus fixed** — power and more dropdown menus now open anchored directly below their button.
+
+## Fixed
+
+- Fixed power (`▾`) and more (`⋯`) dropdown context menus appearing detached from the application window at the wrong screen position.
+
+---
+
 ## v3.2.0
 
 ## Added

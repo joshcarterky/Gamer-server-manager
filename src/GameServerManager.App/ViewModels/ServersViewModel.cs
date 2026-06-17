@@ -231,6 +231,15 @@ public class ServersViewModel : BaseViewModel, IDisposable
     public bool IsEmpty => Servers.Count == 0;
     public bool HasServers => !IsEmpty;
 
+    // ── Summary stats for header cards ────────────────────────────────────────
+    public int TotalCount => Servers.Count;
+    public int OnlineCount => Servers.Count(s => s.Status == ServerStatus.Running);
+    public int TotalPlayerCount => Servers.Sum(s => s.PlayerCount);
+    public string TotalPlayerDisplay => Servers.Any(s => s.Status == ServerStatus.Running)
+        ? TotalPlayerCount.ToString()
+        : "—";
+    public int AttentionCount => Servers.Count(s => s.HasWarnings || s.Status == ServerStatus.Error);
+
     public bool IsAddServerOpen
     {
         get => _isAddServerOpen;
@@ -862,6 +871,7 @@ public class ServersViewModel : BaseViewModel, IDisposable
             }
 
             ApplyFilters();
+            NotifyServerCollectionChanged();
         }
         finally
         {
@@ -909,6 +919,11 @@ public class ServersViewModel : BaseViewModel, IDisposable
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(HasServers));
         OnPropertyChanged(nameof(FilteredServers));
+        OnPropertyChanged(nameof(TotalCount));
+        OnPropertyChanged(nameof(OnlineCount));
+        OnPropertyChanged(nameof(TotalPlayerCount));
+        OnPropertyChanged(nameof(TotalPlayerDisplay));
+        OnPropertyChanged(nameof(AttentionCount));
     }
 
     private static void NormalizeProfile(ServerProfile profile)
