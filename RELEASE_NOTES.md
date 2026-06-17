@@ -1,5 +1,34 @@
 # Release Notes
 
+## v3.2.0
+
+## Added
+
+- **Per-map cluster settings** — the Cluster tab in ARK ASA settings now manages CrossARK identity (Cluster ID, Cluster Directory Override, Enable Cluster) directly on each individual server instead of through the global cluster dashboard.
+- **Cluster status badge** — a live status pill on the Cluster tab shows Not configured / Invalid / Needs restart / Ready with colour coding.
+- **Generate Cluster ID** — one-click button generates a unique `asa-<uuid>` cluster identifier and auto-enables clustering.
+- **Browse / Create / Open folder commands** — inline directory picker, create-on-disk, and open-in-Explorer actions for the cluster transfer folder.
+- **Cluster launch preview** — shows the exact `-clusterid=` and `-ClusterDirOverride=` flags appended to the launch command when clustering is enabled.
+- **Cluster transfer presets** (global cluster dashboard) — five one-click presets: Open Cluster, Character Only, No Downloads In, One Way Out, and Locked Map.
+- **Per-map session name and alt-save-directory override** — optional fields on the Add Map form let you customise session name and save directory when adding a map to a cluster.
+- **Member-level validation** — each map card in the cluster dashboard now shows per-port and per-name validation issues inline.
+- **NoTransferFromFiltering default on** — new clusters default to NoTransferFromFiltering enabled for safer transfer behaviour.
+
+## Changed
+
+- Cluster settings keys migrated to `Cluster.Enabled`, `Cluster.Id`, and `Cluster.DirectoryOverride`; old `ClusterID` / `ClusterDirOverride` / `ClusterEnabled` keys are read as fallback so existing profiles continue to work.
+- Missing Cluster ID or Cluster Directory Override when clustering is enabled is now an **error** rather than a warning.
+- `AllowTributeDownloads` resolution now also checks `noTributeDownloads` / `NoTributeDownloads` to prevent conflicting flags.
+- Cluster Directory Override path is validated for illegal characters before save.
+- The Cluster tab description updated to reflect its per-server scope.
+
+## Fixed
+
+- Fixed the Cluster tab DataContext being bound to the nested `Cluster` sub-model instead of the page ViewModel, which caused binding failures for cluster commands and status properties.
+- Fixed `-clusterid=` and `-ClusterDirOverride=` flags being appended to the launch command even when clustering was disabled.
+
+---
+
 ## v3.1.1
 
 ## Added

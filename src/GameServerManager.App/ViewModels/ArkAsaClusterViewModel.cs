@@ -21,15 +21,19 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
     private string _clusterName = "Main Cluster";
     private string _clusterId = "asa-main-cluster";
     private string _clusterDirectoryOverride;
+    private bool _enableClustering = true;
+    private bool _useSharedClusterDirectory = true;
     private string _selectedMapName = "TheIsland_WP";
     private string _customMapName = string.Empty;
+    private string _newSessionName = string.Empty;
+    private string _newAltSaveDirectoryName = string.Empty;
     private int _nextGamePort = 7777;
     private int _nextQueryPort = 27015;
     private int _nextRconPort = 27020;
     private int _maxPlayers = 70;
     private bool _sharedBackupEnabled = true;
     private bool _allowTributeDownloads = true;
-    private bool _noTransferFromFiltering;
+    private bool _noTransferFromFiltering = true;
     private bool _preventDownloadSurvivors;
     private bool _preventDownloadItems;
     private bool _preventDownloadDinos;
@@ -55,6 +59,9 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
 
         AddMapCommand = new RelayCommand(async _ => await AddMapAsync(), () => !_isBusy);
         ValidateCommand = new RelayCommand(async _ => await LoadAsync(), () => !_isBusy);
+        CreateClusterCommand = new RelayCommand(_ => CreateClusterDefaults(), () => !_isBusy);
+        GenerateClusterIdCommand = new RelayCommand(_ => GenerateClusterId(), () => !_isBusy);
+        EnsureClusterDirectoryCommand = new RelayCommand(_ => EnsureClusterDirectory(), () => !_isBusy);
         SaveSharedRulesCommand = new RelayCommand(async _ => await SaveSharedRulesAsync(), () => !_isBusy);
         StartClusterCommand = new RelayCommand(async _ => await StartClusterAsync(), () => !_isBusy && CanStart);
         StopClusterCommand = new RelayCommand(async _ => await StopClusterAsync(), () => !_isBusy && MapCount > 0);
@@ -63,6 +70,11 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
         SyncModsToClusterCommand = new RelayCommand(async _ => await SyncModsAsync(), () => !_isBusy && MapCount > 0);
         CheckModConsistencyCommand = new RelayCommand(async _ => await CheckModConsistencyAsync(), () => !_isBusy && MapCount > 0);
         ApplyClusterCommand = new RelayCommand(async _ => await ApplyClusterAsync(), () => !_isBusy && CanStart);
+        ApplyOpenClusterPresetCommand = new RelayCommand(_ => ApplyTransferPreset(ArkTransferPreset.OpenCluster), () => !_isBusy);
+        ApplyCharacterOnlyPresetCommand = new RelayCommand(_ => ApplyTransferPreset(ArkTransferPreset.CharacterOnly), () => !_isBusy);
+        ApplyNoDownloadsPresetCommand = new RelayCommand(_ => ApplyTransferPreset(ArkTransferPreset.NoDownloadsIn), () => !_isBusy);
+        ApplyOneWayOutPresetCommand = new RelayCommand(_ => ApplyTransferPreset(ArkTransferPreset.OneWayOut), () => !_isBusy);
+        ApplyLockedMapPresetCommand = new RelayCommand(_ => ApplyTransferPreset(ArkTransferPreset.LockedMap), () => !_isBusy);
 
         _ = LoadAsync();
     }
@@ -74,6 +86,9 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
 
     public RelayCommand AddMapCommand { get; }
     public RelayCommand ValidateCommand { get; }
+    public RelayCommand CreateClusterCommand { get; }
+    public RelayCommand GenerateClusterIdCommand { get; }
+    public RelayCommand EnsureClusterDirectoryCommand { get; }
     public RelayCommand SaveSharedRulesCommand { get; }
     public RelayCommand StartClusterCommand { get; }
     public RelayCommand StopClusterCommand { get; }
@@ -82,12 +97,21 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
     public RelayCommand SyncModsToClusterCommand { get; }
     public RelayCommand CheckModConsistencyCommand { get; }
     public RelayCommand ApplyClusterCommand { get; }
+    public RelayCommand ApplyOpenClusterPresetCommand { get; }
+    public RelayCommand ApplyCharacterOnlyPresetCommand { get; }
+    public RelayCommand ApplyNoDownloadsPresetCommand { get; }
+    public RelayCommand ApplyOneWayOutPresetCommand { get; }
+    public RelayCommand ApplyLockedMapPresetCommand { get; }
 
     public string ClusterName { get => _clusterName; set => SetProperty(ref _clusterName, value); }
     public string ClusterId { get => _clusterId; set => SetProperty(ref _clusterId, value); }
     public string ClusterDirectoryOverride { get => _clusterDirectoryOverride; set => SetProperty(ref _clusterDirectoryOverride, value); }
+    public bool EnableClustering { get => _enableClustering; set => SetProperty(ref _enableClustering, value); }
+    public bool UseSharedClusterDirectory { get => _useSharedClusterDirectory; set => SetProperty(ref _useSharedClusterDirectory, value); }
     public string SelectedMapName { get => _selectedMapName; set => SetProperty(ref _selectedMapName, value); }
     public string CustomMapName { get => _customMapName; set => SetProperty(ref _customMapName, value); }
+    public string NewSessionName { get => _newSessionName; set => SetProperty(ref _newSessionName, value); }
+    public string NewAltSaveDirectoryName { get => _newAltSaveDirectoryName; set => SetProperty(ref _newAltSaveDirectoryName, value); }
     public int NextGamePort { get => _nextGamePort; set => SetProperty(ref _nextGamePort, value); }
     public int NextQueryPort { get => _nextQueryPort; set => SetProperty(ref _nextQueryPort, value); }
     public int NextRconPort { get => _nextRconPort; set => SetProperty(ref _nextRconPort, value); }
@@ -133,6 +157,16 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
     public bool CanStart => ErrorCount == 0 && MapCount > 0;
     public string ClusterLogPath => _logger.ClusterLogPath;
     public string ModsLogPath => _logger.ModsLogPath;
+    public string ClusterStatus => MapCount == 0 ? "Not configured" : ErrorCount > 0 ? "Errors" : WarningCount > 0 ? "Warnings" : "Ready";
+    public string ClusterStatusColor => ClusterStatus == "Ready" ? "#2ECC71" : ClusterStatus == "Errors" ? "#FF6969" : ClusterStatus == "Warnings" ? "#F7B267" : "#8EA4B8";
+    public string BackupCoverageStatus => SharedBackupEnabled ? "Shared cluster data included" : "Shared cluster backup disabled";
+    public string RestartRequiredStatus => "Restart required after apply";
+    public string ValidationSummary => ErrorCount == 0 && WarningCount == 0
+        ? "No validation issues."
+        : $"{ErrorCount} error(s), {WarningCount} warning(s).";
+    public string MemberCountText => $"{MapCount} enabled member(s)";
+    public string ConfigPreview => BuildConfigPreview();
+    public bool HasConfigPreview => !string.IsNullOrWhiteSpace(ConfigPreview);
 
     private async Task LoadAsync()
     {
@@ -154,6 +188,7 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
 
             ApplyNextPorts();
             ApplyValidation(dashboard.Validation);
+            ApplyMemberValidation();
             Message = MapCount == 0
                 ? "No cluster maps yet. Add Island or another map to start."
                 : $"Loaded {MapCount} cluster map(s).";
@@ -186,8 +221,9 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
             var display = selected.InternalName.Equals("Custom", StringComparison.OrdinalIgnoreCase) ? mapName : selected.DisplayName;
             var request = new ArkAsaClusterMapRequest(
                 ClusterName, ClusterId, ClusterDirectoryOverride,
-                display, selected.InternalName, mapName,
-                selected.DefaultAltSaveDirectoryName,
+                string.IsNullOrWhiteSpace(NewSessionName) ? display : NewSessionName,
+                selected.InternalName, mapName,
+                string.IsNullOrWhiteSpace(NewAltSaveDirectoryName) ? selected.DefaultAltSaveDirectoryName : NewAltSaveDirectoryName,
                 Path.Combine(Environment.CurrentDirectory, "Servers", "ARK_Survival_Ascended", Sanitize(display)),
                 NextGamePort, NextQueryPort, NextRconPort, MaxPlayers, SharedBackupEnabled,
                 NoTransferFromFiltering, PreventDownloadSurvivors, PreventDownloadItems, PreventDownloadDinos,
@@ -196,6 +232,8 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
             await _serversJsonService.AddServerAsync(_clusterManager.CreateClusterMapProfile(request));
             await _logger.LogClusterAsync($"Added map '{display}' to cluster '{ClusterName}'", $"ClusterID: {ClusterId}");
             Message = $"Added {display} to {ClusterName}.";
+            NewSessionName = string.Empty;
+            NewAltSaveDirectoryName = string.Empty;
             await LoadAsync();
         }
         finally
@@ -210,6 +248,7 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
         foreach (var profile in profiles.Where(IsClusterProfile))
         {
             profile.Settings["ClusterID"] = ClusterId;
+            profile.Settings["ClusterEnabled"] = EnableClustering.ToString();
             profile.Settings["ClusterDirOverride"] = ClusterDirectoryOverride;
             profile.Settings["SharedClusterFolder"] = ClusterDirectoryOverride;
             profile.Settings["ClusterMapGroup"] = ClusterName;
@@ -221,6 +260,7 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
             profile.Settings["PreventUploadItems"] = PreventUploadItems.ToString();
             profile.Settings["PreventUploadDinos"] = PreventUploadDinos.ToString();
             profile.Settings["AllowTributeDownloads"] = AllowTributeDownloads.ToString();
+            profile.Settings["NoTributeDownloads"] = (!AllowTributeDownloads).ToString();
             profile.Settings["SharedBackup"] = SharedBackupEnabled.ToString();
             profile.AutoBackupEnabled = SharedBackupEnabled;
             await _serversJsonService.UpdateServerAsync(profile);
@@ -293,6 +333,7 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
             foreach (var profile in profiles.Where(IsClusterProfile))
             {
                 profile.Settings["ClusterID"] = ClusterId;
+                profile.Settings["ClusterEnabled"] = EnableClustering.ToString();
                 profile.Settings["ClusterDirOverride"] = ClusterDirectoryOverride;
                 profile.Settings["SharedClusterFolder"] = ClusterDirectoryOverride;
                 profile.Settings["ClusterMapGroup"] = ClusterName;
@@ -304,6 +345,7 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
                 profile.Settings["PreventUploadItems"] = PreventUploadItems.ToString();
                 profile.Settings["PreventUploadDinos"] = PreventUploadDinos.ToString();
                 profile.Settings["AllowTributeDownloads"] = AllowTributeDownloads.ToString();
+                profile.Settings["NoTributeDownloads"] = (!AllowTributeDownloads).ToString();
                 profile.Settings["SharedBackup"] = SharedBackupEnabled.ToString();
                 profile.AutoBackupEnabled = SharedBackupEnabled;
                 await _serversJsonService.UpdateServerAsync(profile);
@@ -482,8 +524,125 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
         OnPropertyChanged(nameof(ErrorCount));
         OnPropertyChanged(nameof(WarningCount));
         OnPropertyChanged(nameof(CanStart));
+        OnPropertyChanged(nameof(ClusterStatus));
+        OnPropertyChanged(nameof(ClusterStatusColor));
+        OnPropertyChanged(nameof(BackupCoverageStatus));
+        OnPropertyChanged(nameof(ValidationSummary));
+        OnPropertyChanged(nameof(MemberCountText));
+        OnPropertyChanged(nameof(ConfigPreview));
+        OnPropertyChanged(nameof(HasConfigPreview));
         NotifyCommandsCanExecute();
     }
+
+    private void ApplyMemberValidation()
+    {
+        foreach (var map in ClusterMaps)
+        {
+            var messages = ValidationIssues
+                .Where(issue => issue.Message.Contains(map.MapName, StringComparison.OrdinalIgnoreCase) ||
+                                issue.Message.Contains(map.GamePort.ToString(), StringComparison.OrdinalIgnoreCase) ||
+                                issue.Message.Contains(map.QueryPort.ToString(), StringComparison.OrdinalIgnoreCase) ||
+                                issue.Message.Contains(map.RconPort.ToString(), StringComparison.OrdinalIgnoreCase))
+                .Select(issue => issue.Message)
+                .ToArray();
+            map.Validation = messages.Length == 0 ? "OK" : string.Join("; ", messages);
+        }
+    }
+
+    private void CreateClusterDefaults()
+    {
+        EnableClustering = true;
+        UseSharedClusterDirectory = true;
+        if (string.IsNullOrWhiteSpace(ClusterId))
+        {
+            GenerateClusterId();
+        }
+
+        if (string.IsNullOrWhiteSpace(ClusterDirectoryOverride))
+        {
+            ClusterDirectoryOverride = Path.Combine(Environment.CurrentDirectory, "Servers", "ARK_ASA_Cluster", ClusterId);
+        }
+
+        Message = "Cluster defaults are ready. Add at least two maps, then apply.";
+    }
+
+    private void GenerateClusterId()
+    {
+        ClusterId = $"asa-{Guid.NewGuid():N}"[..16];
+        if (string.IsNullOrWhiteSpace(ClusterDirectoryOverride))
+        {
+            ClusterDirectoryOverride = Path.Combine(Environment.CurrentDirectory, "Servers", "ARK_ASA_Cluster", ClusterId);
+        }
+    }
+
+    private void EnsureClusterDirectory()
+    {
+        try
+        {
+            Directory.CreateDirectory(ClusterDirectoryOverride);
+            Message = $"Cluster directory is ready: {ClusterDirectoryOverride}";
+        }
+        catch (Exception ex)
+        {
+            Message = $"Could not create cluster directory: {ex.Message}";
+        }
+    }
+
+    private void ApplyTransferPreset(ArkTransferPreset preset)
+    {
+        PreventDownloadSurvivors = preset is ArkTransferPreset.NoDownloadsIn or ArkTransferPreset.OneWayOut or ArkTransferPreset.LockedMap;
+        PreventDownloadItems = preset is ArkTransferPreset.CharacterOnly or ArkTransferPreset.NoDownloadsIn or ArkTransferPreset.OneWayOut or ArkTransferPreset.LockedMap;
+        PreventDownloadDinos = preset is ArkTransferPreset.CharacterOnly or ArkTransferPreset.NoDownloadsIn or ArkTransferPreset.OneWayOut or ArkTransferPreset.LockedMap;
+        PreventUploadSurvivors = preset == ArkTransferPreset.LockedMap;
+        PreventUploadItems = preset is ArkTransferPreset.CharacterOnly or ArkTransferPreset.LockedMap;
+        PreventUploadDinos = preset is ArkTransferPreset.CharacterOnly or ArkTransferPreset.LockedMap;
+        AllowTributeDownloads = preset == ArkTransferPreset.OpenCluster;
+        Message = $"Applied transfer preset: {PresetLabel(preset)}.";
+        OnPropertyChanged(nameof(ConfigPreview));
+        OnPropertyChanged(nameof(HasConfigPreview));
+    }
+
+    private string BuildConfigPreview()
+    {
+        if (MapCount == 0)
+        {
+            return string.Empty;
+        }
+
+        var lines = new List<string>
+        {
+            "Command line args:"
+        };
+        foreach (var map in ClusterMaps)
+        {
+            lines.Add($"{map.DisplayName}: {map.LaunchArguments}");
+        }
+
+        lines.Add(string.Empty);
+        lines.Add("GameUserSettings.ini [ServerSettings]:");
+        lines.Add($"PreventDownloadSurvivors={PreventDownloadSurvivors}");
+        lines.Add($"PreventDownloadItems={PreventDownloadItems}");
+        lines.Add($"PreventDownloadDinos={PreventDownloadDinos}");
+        lines.Add($"PreventUploadSurvivors={PreventUploadSurvivors}");
+        lines.Add($"PreventUploadItems={PreventUploadItems}");
+        lines.Add($"PreventUploadDinos={PreventUploadDinos}");
+        lines.Add($"noTributeDownloads={!AllowTributeDownloads}");
+        lines.Add(string.Empty);
+        lines.Add("Backup plan:");
+        lines.Add(SharedBackupEnabled
+            ? $"Back up each map SavedArks folder and shared cluster data at {ClusterDirectoryOverride}."
+            : "Back up each map SavedArks folder only.");
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string PresetLabel(ArkTransferPreset preset) => preset switch
+    {
+        ArkTransferPreset.OpenCluster => "Open Cluster",
+        ArkTransferPreset.CharacterOnly => "Character Only",
+        ArkTransferPreset.NoDownloadsIn => "No Downloads In",
+        ArkTransferPreset.OneWayOut => "One Way Out",
+        _ => "Locked Map"
+    };
 
     private void NotifyCommandsCanExecute()
     {
@@ -497,6 +656,14 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
         AddMapCommand.NotifyCanExecuteChanged();
         ValidateCommand.NotifyCanExecuteChanged();
         SaveSharedRulesCommand.NotifyCanExecuteChanged();
+        CreateClusterCommand.NotifyCanExecuteChanged();
+        GenerateClusterIdCommand.NotifyCanExecuteChanged();
+        EnsureClusterDirectoryCommand.NotifyCanExecuteChanged();
+        ApplyOpenClusterPresetCommand.NotifyCanExecuteChanged();
+        ApplyCharacterOnlyPresetCommand.NotifyCanExecuteChanged();
+        ApplyNoDownloadsPresetCommand.NotifyCanExecuteChanged();
+        ApplyOneWayOutPresetCommand.NotifyCanExecuteChanged();
+        ApplyLockedMapPresetCommand.NotifyCanExecuteChanged();
     }
 
     private void ApplyNextPorts()
@@ -539,6 +706,15 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
     public void Dispose() => _processService.Dispose();
 }
 
+public enum ArkTransferPreset
+{
+    OpenCluster,
+    CharacterOnly,
+    NoDownloadsIn,
+    OneWayOut,
+    LockedMap
+}
+
 public sealed class ArkClusterMapCardViewModel : BaseViewModel
 {
     private readonly ServerProcessService _processService;
@@ -560,10 +736,14 @@ public sealed class ArkClusterMapCardViewModel : BaseViewModel
     public int RconPort => Ark.Network.RCONPort;
     public string ClusterId => Ark.Cluster.ClusterID;
     public string ClusterDirectoryOverride => Ark.Cluster.ClusterDirectoryOverride;
+    public bool EnabledInCluster => Ark.Cluster.ClusterEnabled;
     public bool IsRunning => _processService.IsRunning(Profile);
     public string StatusText => IsRunning ? "Running" : Profile.Status.ToString();
     public string StatusColor => IsRunning ? "#2ECC71" : "#A8B7C8";
     public string LastBackup => Profile.LastBackupAt?.ToLocalTime().ToString("g") ?? "Never";
+    public string Validation { get; set; } = "OK";
+    public string LaunchArguments => new ArkAsaLaunchBuilder().Build(Ark).Arguments;
+    public string BackupCoverage => Ark.Cluster.ClusterEnabled ? "Map + cluster data" : "Map only";
 }
 
 public sealed class ArkClusterIssueViewModel

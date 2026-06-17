@@ -29,6 +29,10 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
     private string _loadedRawGameUserSettings = string.Empty;
     private string _loadedRawGameIni = string.Empty;
     private readonly string? _requestedProfileId;
+    private string? _loadedServerProfileId;
+    private bool _savedClusterEnabled;
+    private string _savedClusterId = string.Empty;
+    private string _savedClusterDirectoryOverride = string.Empty;
     private int _validationErrorCount;
     private int _validationWarningCount;
     private bool _revealSensitiveRawValues;
@@ -77,6 +81,11 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         CreateBackupCommand = new RelayCommand(async _ => await CreateBackupAsync());
         ExportConfigurationCommand = new RelayCommand(_ => ExportConfiguration());
         ManageModsCommand = new RelayCommand(_ => SelectedTab = "Mods");
+        GenerateClusterIdCommand = new RelayCommand(_ => GenerateClusterId());
+        BrowseClusterDirectoryCommand = new RelayCommand(_ => BrowseClusterDirectory());
+        CreateClusterDirectoryCommand = new RelayCommand(_ => CreateClusterDirectory());
+        OpenClusterFolderCommand = new RelayCommand(_ => OpenClusterFolder());
+        ResetClusterCommand = new RelayCommand(_ => ResetClusterSettings());
 
         LoadRegistry();
         SelectCategory("Overview");
@@ -106,6 +115,11 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
     public RelayCommand CreateBackupCommand { get; }
     public RelayCommand ExportConfigurationCommand { get; }
     public RelayCommand ManageModsCommand { get; }
+    public RelayCommand GenerateClusterIdCommand { get; }
+    public RelayCommand BrowseClusterDirectoryCommand { get; }
+    public RelayCommand CreateClusterDirectoryCommand { get; }
+    public RelayCommand OpenClusterFolderCommand { get; }
+    public RelayCommand ResetClusterCommand { get; }
 
     public string SearchText
     {
@@ -208,7 +222,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         "Rates" => "Experience, taming, harvesting, difficulty, and other server pace multipliers.",
         "Breeding / Imprinting" => "Mating, hatching, maturation, cuddle timing, and imprint behavior.",
         "Mods" => "Dedicated CurseForge and ASA mod list management.",
-        "Cluster" => "Cluster ID, shared transfer folder, member maps, and transfer rules.",
+        "Cluster" => "CrossARK transfer identity and shared cluster directory override.",
         "Raw INI Editor" => "Advanced direct editing for GameUserSettings.ini, Game.ini, and launch command review.",
         _ => $"Configure {SelectedTab.ToLowerInvariant()} settings for this ARK server."
     };
@@ -284,16 +298,119 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
     public string OnlinePlayersText => $"0 / {_profile.Basic.MaxPlayers}";
     public string UptimeText => "Not running";
     public string ModCountText => $"{_profile.Mods.EnabledMods.Count(mod => mod.Enabled)} enabled";
-    public string ClusterNameText => string.IsNullOrWhiteSpace(_profile.Cluster.ClusterMapGroup) ? "Not clustered" : _profile.Cluster.ClusterMapGroup;
+    public string ClusterNameText => ClusterEnabled
+        ? (string.IsNullOrWhiteSpace(ClusterId) ? "Cluster enabled" : ClusterId)
+        : "Not clustered";
+    public bool ClusterEnabled
+    {
+        get => _profile.Cluster.ClusterEnabled;
+        set
+        {
+            if (_profile.Cluster.ClusterEnabled != value)
+            {
+                _profile.Cluster.ClusterEnabled = value;
+                OnPropertyChanged();
+                OnClusterSettingChanged();
+            }
+        }
+    }
+    public string ClusterId
+    {
+        get => _profile.Cluster.ClusterID;
+        set
+        {
+            value ??= string.Empty;
+            if (_profile.Cluster.ClusterID != value)
+            {
+                _profile.Cluster.ClusterID = value;
+                OnPropertyChanged();
+                OnClusterSettingChanged();
+            }
+        }
+    }
+    public string ClusterDirectoryOverride
+    {
+        get => _profile.Cluster.ClusterDirectoryOverride;
+        set
+        {
+            value ??= string.Empty;
+            if (_profile.Cluster.ClusterDirectoryOverride != value)
+            {
+                _profile.Cluster.ClusterDirectoryOverride = value;
+                _profile.Paths.ClusterPath = string.IsNullOrWhiteSpace(value)
+                    ? Path.Combine(_profile.Basic.InstallPath, "Cluster")
+                    : value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ClusterDirectoryStatusText));
+                OnClusterSettingChanged();
+            }
+        }
+    }
+    public bool ClusterHasUnsavedChanges =>
+        ClusterEnabled != _savedClusterEnabled ||
+        !string.Equals(ClusterId, _savedClusterId, StringComparison.Ordinal) ||
+        !string.Equals(ClusterDirectoryOverride, _savedClusterDirectoryOverride, StringComparison.Ordinal);
+    public string ClusterStatusText
+    {
+        get
+        {
+            if (!ClusterEnabled)
+            {
+                return "Not configured";
+            }
+
+            if (string.IsNullOrWhiteSpace(ClusterId) || string.IsNullOrWhiteSpace(ClusterDirectoryOverride))
+            {
+                return "Invalid";
+            }
+
+            return ClusterHasUnsavedChanges ? "Needs restart" : "Ready";
+        }
+    }
+    public string ClusterStatusColor => ClusterStatusText switch
+    {
+        "Ready" => "#1E7D4C",
+        "Needs restart" => "#8A6420",
+        "Invalid" => "#8A2F3B",
+        _ => "#263A50"
+    };
+    public string ClusterStatusMessage => ClusterEnabled
+        ? "Set the same Cluster ID and Cluster Directory Override on every ARK ASA map in this cluster."
+        : "Enable clustering when this map should share CrossARK transfers with other maps.";
+    public string ClusterDirectoryStatusText
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(ClusterDirectoryOverride))
+            {
+                return "Choose the shared CrossARK transfer folder.";
+            }
+
+            if (!Directory.Exists(ClusterDirectoryOverride))
+            {
+                return "Folder does not exist yet. Create it before starting clustered maps.";
+            }
+
+            return CanWriteToDirectory(ClusterDirectoryOverride)
+                ? "Folder exists and is writable."
+                : "Folder exists but is not writable.";
+        }
+    }
+    public string ClusterLaunchPreview => ClusterEnabled
+        ? $"-clusterid={ClusterId} -ClusterDirOverride=\"{ClusterDirectoryOverride}\""
+        : string.Empty;
+    public bool ShowClusterLaunchPreview => ClusterEnabled;
     public int GamePort => _profile.Network.GamePort;
     public int QueryPort => _profile.Network.QueryPort;
     public int RconPort => _profile.Network.RCONPort;
     public int TotalSettingsCount => Settings.Count;
     public int VisibleSettingsCount => FilteredSettings.Count;
     public int UnsavedChangesCount => Settings.Count(setting => setting.IsModified)
+        + (ClusterHasUnsavedChanges ? 1 : 0)
         + (ServerName != (Settings.FirstOrDefault(setting => setting.Key == "SessionName")?.SavedValue ?? ServerName) ? 0 : 0);
-    public int RestartRequiredChangesCount => Settings.Count(setting => setting.IsModified && setting.RestartRequired);
-    public bool HasUnsavedChanges => Settings.Any(setting => setting.IsModified) || RawGameUserSettings != _loadedRawGameUserSettings || RawGameIni != _loadedRawGameIni;
+    public int RestartRequiredChangesCount => Settings.Count(setting => setting.IsModified && setting.RestartRequired)
+        + (ClusterHasUnsavedChanges ? 1 : 0);
+    public bool HasUnsavedChanges => Settings.Any(setting => setting.IsModified) || ClusterHasUnsavedChanges || RawGameUserSettings != _loadedRawGameUserSettings || RawGameIni != _loadedRawGameIni;
     public string UnsavedChangesText => HasUnsavedChanges
         ? $"{Settings.Count(setting => setting.IsModified)} unsaved setting changes - {RestartRequiredChangesCount} require restart"
         : "All changes saved";
@@ -400,17 +517,20 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
 
         if (profile != null)
         {
+            _loadedServerProfileId = profile.Id;
             _profile = _mapper.FromServerProfile(profile);
             Message = $"Loaded ARK ASA settings from {profile.ProfileName}.";
         }
         else
         {
+            _loadedServerProfileId = null;
             _profile = new ArkSurvivalAscendedServerProfile();
             _profile.Basic.InstallPath = Path.Combine(Environment.CurrentDirectory, "Servers", "ARK_Survival_Ascended");
             _mapper.HydratePaths(_profile);
             Message = "No ARK ASA profile exists yet. Defaults are ready for a new server instance.";
         }
 
+        CaptureSavedClusterSettings();
         _configurationState = await _configurationStateService.LoadAsync(profile?.Id ?? "new-ark-server", _profile);
         _loadedRawGameUserSettings = _configurationState.GameUserSettingsRawText;
         _loadedRawGameIni = _configurationState.GameIniRawText;
@@ -457,6 +577,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
             }
 
             await SaveRawEditorTextIfChangedAsync();
+            await SaveClusterSettingsToServerProfileAsync();
             var result = await new ArkAsaConfigService().SaveAsync(_profile);
             Message = $"Saved configs: {Path.GetFileName(result.GameUserSettingsPath)}, {Path.GetFileName(result.GameIniPath)}";
             await LoadAsync();
@@ -478,6 +599,38 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         {
             await WriteRawTextAtomicallyAsync(_profile.Paths.GameIniPath, RawGameIni);
         }
+    }
+
+    private async Task SaveClusterSettingsToServerProfileAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_loadedServerProfileId))
+        {
+            return;
+        }
+
+        var profiles = (await _serversJsonService.LoadServersAsync()).ToList();
+        var profile = profiles.FirstOrDefault(server => server.Id.Equals(_loadedServerProfileId, StringComparison.OrdinalIgnoreCase));
+        if (profile == null)
+        {
+            return;
+        }
+
+        profile.Settings["Cluster.Enabled"] = ClusterEnabled.ToString();
+        profile.Settings["Cluster.Id"] = ClusterId;
+        profile.Settings["Cluster.DirectoryOverride"] = ClusterDirectoryOverride;
+        profile.Settings["ClusterEnabled"] = ClusterEnabled.ToString();
+        profile.Settings["ClusterID"] = ClusterId;
+        profile.Settings["ClusterDirOverride"] = ClusterDirectoryOverride;
+        profile.Settings.Remove("NoTransferFromFiltering");
+        await _serversJsonService.UpdateServerAsync(profile);
+        CaptureSavedClusterSettings();
+    }
+
+    private void CaptureSavedClusterSettings()
+    {
+        _savedClusterEnabled = ClusterEnabled;
+        _savedClusterId = ClusterId;
+        _savedClusterDirectoryOverride = ClusterDirectoryOverride;
     }
 
     private static async Task WriteRawTextAtomicallyAsync(string path, string content)
@@ -602,10 +755,16 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
 
     private string BuildPendingSummary()
     {
-        var changed = Settings.Where(setting => setting.IsModified).Take(20).Select(setting =>
-            $"{setting.Category} | {setting.DisplayName} ({setting.Key}): {setting.MaskedSavedValue} -> {setting.MaskedDisplayValue}");
-        var lines = changed.ToArray();
-        return lines.Length == 0 ? "No pending configuration changes." : string.Join(Environment.NewLine, lines);
+        var lines = Settings.Where(setting => setting.IsModified).Take(20).Select(setting =>
+            $"{setting.Category} | {setting.DisplayName} ({setting.Key}): {setting.MaskedSavedValue} -> {setting.MaskedDisplayValue}").ToList();
+        if (ClusterHasUnsavedChanges)
+        {
+            lines.Add($"Cluster | Enable Cluster (Cluster.Enabled): {_savedClusterEnabled} -> {ClusterEnabled}");
+            lines.Add($"Cluster | Cluster ID (Cluster.Id): {_savedClusterId} -> {ClusterId}");
+            lines.Add($"Cluster | Cluster Directory Override (Cluster.DirectoryOverride): {_savedClusterDirectoryOverride} -> {ClusterDirectoryOverride}");
+        }
+
+        return lines.Count == 0 ? "No pending configuration changes." : string.Join(Environment.NewLine, lines);
     }
 
     private void NotifyAll()
@@ -622,6 +781,15 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         OnPropertyChanged(nameof(OnlinePlayersText));
         OnPropertyChanged(nameof(ModCountText));
         OnPropertyChanged(nameof(ClusterNameText));
+        OnPropertyChanged(nameof(ClusterEnabled));
+        OnPropertyChanged(nameof(ClusterId));
+        OnPropertyChanged(nameof(ClusterDirectoryOverride));
+        OnPropertyChanged(nameof(ClusterStatusText));
+        OnPropertyChanged(nameof(ClusterStatusColor));
+        OnPropertyChanged(nameof(ClusterStatusMessage));
+        OnPropertyChanged(nameof(ClusterDirectoryStatusText));
+        OnPropertyChanged(nameof(ClusterLaunchPreview));
+        OnPropertyChanged(nameof(ShowClusterLaunchPreview));
         OnPropertyChanged(nameof(GamePort));
         OnPropertyChanged(nameof(QueryPort));
         OnPropertyChanged(nameof(RconPort));
@@ -635,6 +803,20 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         OnPropertyChanged(nameof(CommandPreview));
         OnPropertyChanged(nameof(MaskedCommandPreview));
         OnPropertyChanged(nameof(DiffPreview));
+    }
+
+    private void OnClusterSettingChanged()
+    {
+        OnPropertyChanged(nameof(ClusterNameText));
+        OnPropertyChanged(nameof(ClusterHasUnsavedChanges));
+        OnPropertyChanged(nameof(ClusterStatusText));
+        OnPropertyChanged(nameof(ClusterStatusColor));
+        OnPropertyChanged(nameof(ClusterStatusMessage));
+        OnPropertyChanged(nameof(ClusterLaunchPreview));
+        OnPropertyChanged(nameof(ShowClusterLaunchPreview));
+        ValidateCurrentProfile();
+        RefreshChangeState();
+        NotifyCommandChanged();
     }
 
     private void OnSettingChanged()
@@ -763,6 +945,11 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
                 item.IsSelected = item.Name.Equals(SelectedTab, StringComparison.OrdinalIgnoreCase);
                 item.ModifiedCount = Settings.Count(setting => setting.Category.Equals(item.Name, StringComparison.OrdinalIgnoreCase) && setting.IsModified);
                 item.ErrorCount = Settings.Count(setting => setting.Category.Equals(item.Name, StringComparison.OrdinalIgnoreCase) && setting.HasError);
+                if (item.Name.Equals("Cluster", StringComparison.OrdinalIgnoreCase))
+                {
+                    item.ModifiedCount += ClusterHasUnsavedChanges ? 1 : 0;
+                    item.ErrorCount += ClusterEnabled && (string.IsNullOrWhiteSpace(ClusterId) || string.IsNullOrWhiteSpace(ClusterDirectoryOverride)) ? 1 : 0;
+                }
             }
         }
     }
@@ -878,11 +1065,34 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         }
 
         var validation = new ArkAsaValidator().Validate(_profile);
-        ValidationErrorCount = validation.Errors.Count + Settings.Count(setting => setting.HasError);
-        ValidationWarningCount = validation.Warnings.Count + Settings.Count(setting => !string.IsNullOrWhiteSpace(setting.WarningText));
+        var clusterErrors = 0;
+        var clusterWarnings = 0;
+        if (ClusterEnabled && !string.IsNullOrWhiteSpace(ClusterDirectoryOverride))
+        {
+            if (!Directory.Exists(ClusterDirectoryOverride))
+            {
+                clusterWarnings++;
+            }
+            else if (!CanWriteToDirectory(ClusterDirectoryOverride))
+            {
+                clusterErrors++;
+            }
+
+            if (!string.IsNullOrWhiteSpace(InstallPath) &&
+                ClusterDirectoryOverride.StartsWith(InstallPath, StringComparison.OrdinalIgnoreCase))
+            {
+                clusterWarnings++;
+            }
+        }
+
+        ValidationErrorCount = validation.Errors.Count + clusterErrors + Settings.Count(setting => setting.HasError);
+        ValidationWarningCount = validation.Warnings.Count + clusterWarnings + Settings.Count(setting => !string.IsNullOrWhiteSpace(setting.WarningText));
         Message = ValidationErrorCount == 0
             ? $"Configuration validated. {ValidationWarningCount} warning(s)."
             : $"Configuration has {ValidationErrorCount} error(s).";
+        OnPropertyChanged(nameof(ClusterStatusText));
+        OnPropertyChanged(nameof(ClusterStatusColor));
+        OnPropertyChanged(nameof(ClusterDirectoryStatusText));
     }
 
     private void ResetSelectedCategory()
@@ -896,6 +1106,13 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         foreach (var setting in Settings.Where(setting => setting.Category.Equals(SelectedTab, StringComparison.OrdinalIgnoreCase)))
         {
             setting.ResetToSaved();
+        }
+
+        if (SelectedTab.Equals("Cluster", StringComparison.OrdinalIgnoreCase))
+        {
+            ClusterEnabled = _savedClusterEnabled;
+            ClusterId = _savedClusterId;
+            ClusterDirectoryOverride = _savedClusterDirectoryOverride;
         }
 
         RefreshChangeState();
@@ -936,6 +1153,72 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         }
     }
 
+    private void GenerateClusterId()
+    {
+        ClusterId = $"asa-{Guid.NewGuid():N}"[..20];
+        ClusterEnabled = true;
+        Message = "Generated a new Cluster ID. Use this same value on every clustered map.";
+    }
+
+    private void BrowseClusterDirectory()
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "Select ARK cluster transfer directory",
+            Multiselect = false
+        };
+
+        if (!string.IsNullOrWhiteSpace(ClusterDirectoryOverride) && Directory.Exists(ClusterDirectoryOverride))
+        {
+            dialog.InitialDirectory = ClusterDirectoryOverride;
+        }
+
+        if (dialog.ShowDialog() == true)
+        {
+            ClusterDirectoryOverride = dialog.FolderName;
+            ClusterEnabled = true;
+        }
+    }
+
+    private void CreateClusterDirectory()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(ClusterDirectoryOverride))
+            {
+                Message = "Enter a Cluster Directory Override path first.";
+                return;
+            }
+
+            Directory.CreateDirectory(ClusterDirectoryOverride);
+            OnPropertyChanged(nameof(ClusterDirectoryStatusText));
+            Message = "Cluster directory is ready.";
+        }
+        catch (Exception ex)
+        {
+            Message = $"Could not create cluster directory: {ex.Message}";
+        }
+    }
+
+    private void OpenClusterFolder()
+    {
+        if (string.IsNullOrWhiteSpace(ClusterDirectoryOverride))
+        {
+            Message = "Enter a Cluster Directory Override path before opening it.";
+            return;
+        }
+
+        OpenFolder(ClusterDirectoryOverride);
+    }
+
+    private void ResetClusterSettings()
+    {
+        ClusterEnabled = false;
+        ClusterId = string.Empty;
+        ClusterDirectoryOverride = string.Empty;
+        Message = "Cluster settings reset. Save Changes to remove cluster launch arguments.";
+    }
+
     private static void OpenFolder(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -945,6 +1228,22 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
 
         Directory.CreateDirectory(path);
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+    }
+
+    private static bool CanWriteToDirectory(string path)
+    {
+        try
+        {
+            Directory.CreateDirectory(path);
+            var testPath = Path.Combine(path, $".nsm-write-test-{Guid.NewGuid():N}.tmp");
+            File.WriteAllText(testPath, string.Empty);
+            File.Delete(testPath);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static string SectionDescription(string section) => section switch

@@ -69,6 +69,13 @@ TestImportDetection();
 await TestImportCopyServiceAsync();
 TestMemoryPolicy();
 await TestArkSurvivalAscendedAsync();
+TestArkClusterArgsEmittedWhenEnabled();
+TestArkClusterArgsOmittedWhenDisabled();
+TestArkClusterSharedDirectoryQuoting();
+TestArkTransferRestrictionMapping();
+TestArkDuplicatePortValidation();
+TestArkSingleMemberClusterWarning();
+TestArkCleanMultiMemberClusterValidation();
 TestUpdaterVersionComparison();
 TestSettingsUpdateSeparation();
 TestArkSettingsRedesignContracts();
@@ -248,6 +255,7 @@ static async Task TestArkSurvivalAscendedAsync()
         {
             ["RCONEnabled"] = "True",
             ["AltSaveDirectoryName"] = "Island01",
+            ["ClusterEnabled"] = "True",
             ["ClusterID"] = "cluster-one",
             ["ClusterDirOverride"] = "C:\\Clusters\\cluster-one",
             ["ModIDs"] = "928708,929110"
@@ -260,6 +268,33 @@ static async Task TestArkSurvivalAscendedAsync()
     Assert(command.Arguments.Contains("ServerAdminPassword=\"admin-secret\"", StringComparison.Ordinal), "ARK launch command should include admin password for process launch.");
     Assert(command.Arguments.Contains("-mods=928708,929110", StringComparison.Ordinal), "ARK launch command should include mods.");
     Assert(command.Arguments.Contains("-clusterid=cluster-one", StringComparison.Ordinal), "ARK launch command should include cluster ID.");
+
+    var disabledClusterProfile = CreateArkClusterTestProfile(provider);
+    disabledClusterProfile.Settings["Cluster.Enabled"] = "False";
+    disabledClusterProfile.Settings["Cluster.Id"] = "disabled-cluster";
+    disabledClusterProfile.Settings["Cluster.DirectoryOverride"] = "C:\\ARK Clusters\\Disabled Cluster";
+    var disabledClusterCommand = provider.BuildStartCommand(disabledClusterProfile);
+    Assert(!disabledClusterCommand.Arguments.Contains("-clusterid", StringComparison.OrdinalIgnoreCase), "Disabled cluster should not emit -clusterid.");
+    Assert(!disabledClusterCommand.Arguments.Contains("-ClusterDirOverride", StringComparison.OrdinalIgnoreCase), "Disabled cluster should not emit -ClusterDirOverride.");
+
+    var enabledClusterProfile = CreateArkClusterTestProfile(provider);
+    enabledClusterProfile.Settings["Cluster.Enabled"] = "True";
+    enabledClusterProfile.Settings["Cluster.Id"] = "main-crossark";
+    enabledClusterProfile.Settings["Cluster.DirectoryOverride"] = "C:\\ARK Clusters\\Main Cluster";
+    var enabledClusterCommand = provider.BuildStartCommand(enabledClusterProfile);
+    Assert(enabledClusterCommand.Arguments.Contains("-clusterid=main-crossark", StringComparison.Ordinal), "Enabled cluster should emit Cluster ID.");
+    Assert(enabledClusterCommand.Arguments.Contains("-ClusterDirOverride=\"C:\\ARK Clusters\\Main Cluster\"", StringComparison.Ordinal), "Enabled cluster should quote Cluster Directory Override paths with spaces.");
+    Assert(!enabledClusterCommand.Arguments.Contains("-NoTransferFromFiltering", StringComparison.Ordinal), "Cluster launch should not add NoTransferFromFiltering.");
+
+    var missingClusterIdProfile = new ArkAsaProfileMapper().FromServerProfile(enabledClusterProfile);
+    missingClusterIdProfile.Cluster.ClusterID = string.Empty;
+    var missingClusterIdValidation = new ArkAsaValidator().Validate(missingClusterIdProfile);
+    Assert(missingClusterIdValidation.Errors.Any(error => error.Contains("Cluster ID is required", StringComparison.Ordinal)), "Missing Cluster ID should be a validation error.");
+
+    var missingClusterDirProfile = new ArkAsaProfileMapper().FromServerProfile(enabledClusterProfile);
+    missingClusterDirProfile.Cluster.ClusterDirectoryOverride = string.Empty;
+    var missingClusterDirValidation = new ArkAsaValidator().Validate(missingClusterDirProfile);
+    Assert(missingClusterDirValidation.Errors.Any(error => error.Contains("Cluster Directory Override is required", StringComparison.Ordinal)), "Missing Cluster Directory Override should be a validation error.");
 
     var steamCmd = new ArkAsaSteamCmdService().BuildInstallOrUpdateArguments("C:\\Servers\\ARK ASA");
     Assert(steamCmd == "+force_install_dir \"C:\\Servers\\ARK ASA\" +login anonymous +app_update 2430930 validate +quit", "SteamCMD command mismatch.");
@@ -350,10 +385,12 @@ static async Task TestArkSurvivalAscendedAsync()
         Assert(health.Warnings.Any(warning => warning.Contains("Missing executable", StringComparison.Ordinal)), "Health check should warn about missing executable.");
 
         var clusterManager = new ArkAsaClusterManager();
+        var clusterSharedDirectory = Path.Combine(tempRoot, "shared cluster");
+        Directory.CreateDirectory(clusterSharedDirectory);
         var island = clusterManager.CreateClusterMapProfile(new ArkAsaClusterMapRequest(
             "Test Cluster",
             "cluster-shared",
-            "C:\\Clusters\\shared",
+            clusterSharedDirectory,
             "Island",
             "TheIsland_WP",
             string.Empty,
@@ -375,7 +412,7 @@ static async Task TestArkSurvivalAscendedAsync()
         var scorched = clusterManager.CreateClusterMapProfile(new ArkAsaClusterMapRequest(
             "Test Cluster",
             "cluster-shared",
-            "C:\\Clusters\\shared",
+            clusterSharedDirectory,
             "Scorched",
             "ScorchedEarth_WP",
             string.Empty,
@@ -406,6 +443,126 @@ static async Task TestArkSurvivalAscendedAsync()
         Assert(clusterReport.Errors.Any(error => error.Message.Contains("ClusterID does not match", StringComparison.Ordinal)), "Cluster validation should catch mismatched ClusterID.");
         Assert(clusterReport.Errors.Any(error => error.Message.Contains("conflicts", StringComparison.Ordinal)), "Cluster validation should catch port conflicts.");
         Assert(clusterReport.Warnings.Any(warning => warning.Message.Contains("Aberration_WP", StringComparison.Ordinal)), "Cluster validation should warn when an expected map is missing.");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
+}
+
+static void TestArkClusterArgsEmittedWhenEnabled()
+{
+    var provider = new ArkSurvivalAscendedProvider();
+    var profile = CreateArkClusterProfile("enabled", 7777, 27015, 27020);
+    profile.Settings["ClusterEnabled"] = "True";
+
+    var command = provider.BuildStartCommand(profile);
+
+    Assert(command.Arguments.Contains("-clusterid=cluster-one", StringComparison.Ordinal), "Cluster ID arg should be emitted when clustering is enabled.");
+    Assert(command.Arguments.Contains("-ClusterDirOverride=\"C:\\ARK Clusters\\cluster one\"", StringComparison.Ordinal), "Cluster directory arg should be emitted when clustering is enabled.");
+    Assert(!command.Arguments.Contains("-NoTransferFromFiltering", StringComparison.Ordinal), "Cluster launch should only emit Cluster ID and Cluster Directory Override.");
+}
+
+static void TestArkClusterArgsOmittedWhenDisabled()
+{
+    var provider = new ArkSurvivalAscendedProvider();
+    var profile = CreateArkClusterProfile("disabled", 7777, 27015, 27020);
+    profile.Settings["ClusterEnabled"] = "False";
+
+    var command = provider.BuildStartCommand(profile);
+
+    Assert(!command.Arguments.Contains("-clusterid=", StringComparison.Ordinal), "Cluster ID arg should be omitted when clustering is disabled.");
+    Assert(!command.Arguments.Contains("-ClusterDirOverride", StringComparison.Ordinal), "Cluster directory arg should be omitted when clustering is disabled.");
+    Assert(!command.Arguments.Contains("-NoTransferFromFiltering", StringComparison.Ordinal), "Compatibility flag should be omitted when clustering is disabled.");
+}
+
+static void TestArkClusterSharedDirectoryQuoting()
+{
+    var provider = new ArkSurvivalAscendedProvider();
+    var profile = CreateArkClusterProfile("quoted", 7777, 27015, 27020);
+    profile.Settings["ClusterEnabled"] = "True";
+    profile.Settings["ClusterDirOverride"] = "C:\\ARK Clusters\\cluster one";
+
+    var command = provider.BuildStartCommand(profile);
+
+    Assert(command.Arguments.Contains("-ClusterDirOverride=\"C:\\ARK Clusters\\cluster one\"", StringComparison.Ordinal), "ClusterDirOverride should be quoted for paths with spaces.");
+}
+
+static void TestArkTransferRestrictionMapping()
+{
+    var request = new ArkAsaClusterMapRequest(
+        "Test Cluster",
+        "cluster-one",
+        "C:\\ARKClusters\\cluster-one",
+        "Island",
+        "TheIsland_WP",
+        string.Empty,
+        "Island",
+        "C:\\Servers\\ARK\\Island",
+        7777,
+        27015,
+        27020,
+        70,
+        true,
+        true,
+        PreventDownloadSurvivors: true,
+        PreventDownloadItems: true,
+        PreventDownloadDinos: true,
+        PreventUploadSurvivors: false,
+        PreventUploadItems: true,
+        PreventUploadDinos: true,
+        AllowTributeDownloads: false);
+
+    var profile = new ArkAsaClusterManager().CreateClusterMapProfile(request);
+
+    Assert(profile.Settings["PreventDownloadSurvivors"] == "True", "Survivor download block should map to PreventDownloadSurvivors=True.");
+    Assert(profile.Settings["PreventDownloadItems"] == "True", "Item download block should map to PreventDownloadItems=True.");
+    Assert(profile.Settings["PreventDownloadDinos"] == "True", "Dino download block should map to PreventDownloadDinos=True.");
+    Assert(profile.Settings["PreventUploadSurvivors"] == "False", "Survivor upload allowance should map to PreventUploadSurvivors=False.");
+    Assert(profile.Settings["PreventUploadItems"] == "True", "Item upload block should map to PreventUploadItems=True.");
+    Assert(profile.Settings["PreventUploadDinos"] == "True", "Dino upload block should map to PreventUploadDinos=True.");
+    Assert(profile.Settings["AllowTributeDownloads"] == "False", "Tribute download block should map through AllowTributeDownloads=False.");
+    Assert(profile.Settings["noTributeDownloads"] == "True", "Tribute download block should map to noTributeDownloads=True.");
+}
+
+static void TestArkDuplicatePortValidation()
+{
+    var manager = new ArkAsaClusterManager();
+    var profiles = new[]
+    {
+        CreateArkClusterProfile("island", 7777, 27015, 27020),
+        CreateArkClusterProfile("scorched", 7777, 27016, 27021)
+    };
+
+    var report = manager.ValidateClusterProfiles(profiles);
+
+    Assert(report.Errors.Any(error => error.Message.Contains("conflicts", StringComparison.OrdinalIgnoreCase)), "Cluster validation should catch duplicate game/query/RCON ports.");
+}
+
+static void TestArkSingleMemberClusterWarning()
+{
+    var manager = new ArkAsaClusterManager();
+    var report = manager.ValidateClusterProfiles(new[] { CreateArkClusterProfile("island", 7777, 27015, 27020) });
+
+    Assert(report.Warnings.Any(warning => warning.Message.Contains("at least two", StringComparison.OrdinalIgnoreCase)), "Single-member clusters should show a warning.");
+}
+
+static void TestArkCleanMultiMemberClusterValidation()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var shared = Path.Combine(tempRoot, "cluster shared");
+        Directory.CreateDirectory(shared);
+        var island = CreateArkClusterProfile("island", 7777, 27015, 27020, shared);
+        var scorched = CreateArkClusterProfile("scorched", 7778, 27016, 27021, shared);
+        island.Settings["AltSaveDirectoryName"] = "Island";
+        scorched.Settings["AltSaveDirectoryName"] = "Scorched";
+
+        var report = new ArkAsaClusterManager().ValidateClusterProfiles(new[] { island, scorched });
+
+        Assert(report.Errors.Count == 0, "Multiple members with the same cluster ID/shared directory and unique ports should validate cleanly.");
+        Assert(!report.Warnings.Any(warning => warning.Message.Contains("at least two", StringComparison.OrdinalIgnoreCase)), "Valid multi-member clusters should not show the single-member warning.");
     }
     finally
     {
@@ -604,6 +761,62 @@ static ServerProfile CreateTestProfile(string id, string serverName)
                 Protocol = PortProtocol.UDP,
                 IsRequired = true
             }
+        }
+    };
+}
+
+static ServerProfile CreateArkClusterProfile(string id, int gamePort, int queryPort, int rconPort, string? sharedDirectory = null)
+{
+    return new ServerProfile
+    {
+        Id = id,
+        GameId = ArkSurvivalAscendedServerProfile.GameId,
+        ProfileName = id,
+        ServerName = $"ASA {id}",
+        InstallPath = Path.Combine("C:\\Servers\\ARK", id),
+        MapName = id.Equals("scorched", StringComparison.OrdinalIgnoreCase) ? "ScorchedEarth_WP" : "TheIsland_WP",
+        MaxPlayers = 70,
+        Ports = new List<ServerPort>
+        {
+            new() { Name = "Game", Port = gamePort, DefaultPort = 7777, Protocol = PortProtocol.UDP, IsRequired = true },
+            new() { Name = "Query", Port = queryPort, DefaultPort = 27015, Protocol = PortProtocol.UDP, IsRequired = true },
+            new() { Name = "RCON", Port = rconPort, DefaultPort = 27020, Protocol = PortProtocol.TCP, IsRequired = false }
+        },
+        Settings =
+        {
+            ["ClusterEnabled"] = "True",
+            ["ClusterID"] = "cluster-one",
+            ["ClusterDirOverride"] = sharedDirectory ?? "C:\\ARK Clusters\\cluster one",
+            ["AltSaveDirectoryName"] = id,
+            ["RCONEnabled"] = "True"
+        }
+    };
+}
+
+static ServerProfile CreateArkClusterTestProfile(IGameServerProvider provider)
+{
+    return new ServerProfile
+    {
+        Id = Guid.NewGuid().ToString(),
+        GameId = ArkSurvivalAscendedServerProfile.GameId,
+        ProfileName = "Cluster Test",
+        ServerName = "Cluster Test",
+        InstallPath = Path.Combine("C:\\Servers", "ARK ASA Cluster Test"),
+        MapName = "TheIsland_WP",
+        MaxPlayers = 10,
+        AdminPassword = "admin-secret",
+        Ports = provider.DefaultPorts.Select(p => new ServerPort
+        {
+            Name = p.Name,
+            Port = p.Port,
+            DefaultPort = p.DefaultPort,
+            Protocol = p.Protocol,
+            Description = p.Description,
+            IsRequired = p.IsRequired
+        }).ToList(),
+        Settings =
+        {
+            ["RCONEnabled"] = "True"
         }
     };
 }

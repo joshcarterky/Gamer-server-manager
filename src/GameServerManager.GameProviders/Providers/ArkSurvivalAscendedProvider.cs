@@ -41,8 +41,9 @@ public class ArkSurvivalAscendedProvider : GameServerProviderBase
         Number("RCONPort", "RCON Port", "27020", 1, 65535, "RCON / Console"),
         Toggle("RCONEnabled", "Enable RCON", "True", "RCON / Console"),
         Text("AltSaveDirectoryName", "Alt Save Directory", string.Empty, false, "Maps"),
-        Text("ClusterID", "Cluster ID", string.Empty, false, "Cluster"),
-        Text("ClusterDirOverride", "Cluster Directory Override", string.Empty, false, "Cluster"),
+        Toggle("Cluster.Enabled", "Enable Cluster", "False", "Cluster"),
+        Text("Cluster.Id", "Cluster ID", string.Empty, false, "Cluster"),
+        Text("Cluster.DirectoryOverride", "Cluster Directory Override", string.Empty, false, "Cluster"),
         Text("ModIDs", "Mod IDs", string.Empty, false, "Mods")
     };
 
@@ -84,21 +85,19 @@ public class ArkSurvivalAscendedProvider : GameServerProviderBase
         }
 
         var flags = new List<string>();
-        var clusterId = Get(profile, "ClusterID");
-        var clusterDir = Get(profile, "ClusterDirOverride");
-        if (!string.IsNullOrWhiteSpace(clusterId))
+        if (IsClusterEnabled(profile))
         {
-            flags.Add($"-clusterid={clusterId}");
-        }
+            var clusterId = First(profile, "Cluster.Id", "ClusterID");
+            var clusterDir = First(profile, "Cluster.DirectoryOverride", "ClusterDirOverride");
+            if (!string.IsNullOrWhiteSpace(clusterId))
+            {
+                flags.Add($"-clusterid={EscapeArgument(clusterId)}");
+            }
 
-        if (!string.IsNullOrWhiteSpace(clusterDir))
-        {
-            flags.Add($"-ClusterDirOverride=\"{clusterDir}\"");
-        }
-
-        if (ParseBool(profile, "NoTransferFromFiltering"))
-        {
-            flags.Add("-NoTransferFromFiltering");
+            if (!string.IsNullOrWhiteSpace(clusterDir))
+            {
+                flags.Add($"-ClusterDirOverride=\"{Escape(clusterDir)}\"");
+            }
         }
 
         var modIds = Get(profile, "ModIDs");
@@ -150,6 +149,35 @@ public class ArkSurvivalAscendedProvider : GameServerProviderBase
         return profile.Settings.TryGetValue(key, out var value) ? value : string.Empty;
     }
 
+    private static string First(ServerProfile profile, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            var value = Get(profile, key);
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static bool IsClusterEnabled(ServerProfile profile)
+    {
+        if (profile.Settings.TryGetValue("Cluster.Enabled", out var modern) && bool.TryParse(modern, out var modernEnabled))
+        {
+            return modernEnabled;
+        }
+
+        if (profile.Settings.TryGetValue("ClusterEnabled", out var legacy) && bool.TryParse(legacy, out var legacyEnabled))
+        {
+            return legacyEnabled;
+        }
+
+        return false;
+    }
+
     private static int ParseInt(ServerProfile profile, string key, int fallback)
     {
         return profile.Settings.TryGetValue(key, out var value) && int.TryParse(value, out var parsed) ? parsed : fallback;
@@ -163,6 +191,11 @@ public class ArkSurvivalAscendedProvider : GameServerProviderBase
     private static string Escape(string value)
     {
         return value.Replace("\"", "\\\"", StringComparison.Ordinal);
+    }
+
+    private static string EscapeArgument(string value)
+    {
+        return value.Contains(' ', StringComparison.Ordinal) ? $"\"{Escape(value)}\"" : Escape(value);
     }
 
     protected static ServerSettingDefinition Text(string key, string displayName, string defaultValue, bool required = false, string? category = null)

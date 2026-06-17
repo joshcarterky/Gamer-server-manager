@@ -41,17 +41,17 @@ public sealed class ArkAsaProfileMapper
         ark.Network.EnableCrossplay = Bool(profile, "EnableCrossplay", true);
         ark.Network.CreateFirewallRules = Bool(profile, "CreateFirewallRules");
 
-        ark.Cluster.ClusterEnabled = Bool(profile, "ClusterEnabled");
-        ark.Cluster.ClusterID = Get(profile, "ClusterID");
-        ark.Cluster.ClusterDirectoryOverride = Get(profile, "ClusterDirOverride");
-        ark.Cluster.NoTransferFromFiltering = Bool(profile, "NoTransferFromFiltering");
+        ark.Cluster.ClusterEnabled = ClusterEnabled(profile);
+        ark.Cluster.ClusterID = First(profile, "Cluster.Id", "ClusterID");
+        ark.Cluster.ClusterDirectoryOverride = First(profile, "Cluster.DirectoryOverride", "ClusterDirOverride");
+        ark.Cluster.NoTransferFromFiltering = Bool(profile, "Cluster.NoTransferFromFiltering", Bool(profile, "NoTransferFromFiltering", true));
         ark.Cluster.PreventDownloadSurvivors = Bool(profile, "PreventDownloadSurvivors");
         ark.Cluster.PreventDownloadItems = Bool(profile, "PreventDownloadItems");
         ark.Cluster.PreventDownloadDinos = Bool(profile, "PreventDownloadDinos");
         ark.Cluster.PreventUploadSurvivors = Bool(profile, "PreventUploadSurvivors");
         ark.Cluster.PreventUploadItems = Bool(profile, "PreventUploadItems");
         ark.Cluster.PreventUploadDinos = Bool(profile, "PreventUploadDinos");
-        ark.Cluster.AllowTributeDownloads = Bool(profile, "AllowTributeDownloads", true);
+        ark.Cluster.AllowTributeDownloads = !Bool(profile, "noTributeDownloads") && !Bool(profile, "NoTributeDownloads") && Bool(profile, "AllowTributeDownloads", true);
         ark.Cluster.SharedClusterFolder = Get(profile, "SharedClusterFolder");
         ark.Cluster.ClusterMapGroup = Get(profile, "ClusterMapGroup");
 
@@ -107,6 +107,20 @@ public sealed class ArkAsaProfileMapper
         return profile.Settings.TryGetValue(key, out var value) ? value : string.Empty;
     }
 
+    private static string First(ServerProfile profile, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            var value = Get(profile, key);
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return string.Empty;
+    }
+
     private static string Value(string value, string fallback)
     {
         return string.IsNullOrWhiteSpace(value) ? fallback : value;
@@ -115,6 +129,22 @@ public sealed class ArkAsaProfileMapper
     private static bool Bool(ServerProfile profile, string key, bool fallback = false)
     {
         return profile.Settings.TryGetValue(key, out var value) && bool.TryParse(value, out var parsed) ? parsed : fallback;
+    }
+
+    private static bool ClusterEnabled(ServerProfile profile)
+    {
+        if (profile.Settings.TryGetValue("Cluster.Enabled", out var modern) && bool.TryParse(modern, out var modernEnabled))
+        {
+            return modernEnabled;
+        }
+
+        if (profile.Settings.TryGetValue("ClusterEnabled", out var legacy) && bool.TryParse(legacy, out var legacyEnabled))
+        {
+            return legacyEnabled;
+        }
+
+        return !string.IsNullOrWhiteSpace(First(profile, "Cluster.Id", "ClusterID")) ||
+               !string.IsNullOrWhiteSpace(First(profile, "Cluster.DirectoryOverride", "ClusterDirOverride"));
     }
 
     private static int Port(ServerProfile profile, string name, int fallback)
@@ -556,12 +586,16 @@ public sealed class ArkAsaValidator
         {
             if (string.IsNullOrWhiteSpace(profile.Cluster.ClusterID))
             {
-                result.Warnings.Add("Cluster is enabled but ClusterID is empty.");
+                result.Errors.Add("Cluster ID is required when clustering is enabled.");
             }
 
             if (string.IsNullOrWhiteSpace(profile.Cluster.ClusterDirectoryOverride))
             {
-                result.Warnings.Add("Cluster is enabled but ClusterDirOverride is empty.");
+                result.Errors.Add("Cluster Directory Override is required when clustering is enabled.");
+            }
+            else if (profile.Cluster.ClusterDirectoryOverride.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+            {
+                result.Errors.Add("Cluster Directory Override contains invalid path characters.");
             }
         }
 
@@ -752,6 +786,7 @@ public sealed class ArkAsaClusterManager
                 ["PreventUploadItems"] = request.PreventUploadItems.ToString(),
                 ["PreventUploadDinos"] = request.PreventUploadDinos.ToString(),
                 ["AllowTributeDownloads"] = request.AllowTributeDownloads.ToString(),
+                ["noTributeDownloads"] = (!request.AllowTributeDownloads).ToString(),
                 ["RCONEnabled"] = "True",
                 ["SharedBackup"] = request.SharedBackupEnabled.ToString()
             }
@@ -823,6 +858,11 @@ public sealed class ArkAsaClusterManager
             return new ArkClusterValidationReport(issues);
         }
 
+        if (maps.Count == 1)
+        {
+            issues.Add(new ArkClusterValidationIssue(ArkClusterIssueSeverity.Warning, "Only one map is enabled. ARK clusters require at least two server profiles."));
+        }
+
         var clusterIds = maps.Select(map => map.Ark.Cluster.ClusterID).Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if (clusterIds.Length == 0)
         {
@@ -841,6 +881,10 @@ public sealed class ArkAsaClusterManager
         else if (clusterDirs.Length > 1)
         {
             issues.Add(new ArkClusterValidationIssue(ArkClusterIssueSeverity.Error, $"ClusterDirOverride does not match across maps: {string.Join(", ", clusterDirs)}."));
+        }
+        else
+        {
+            ValidateSharedClusterDirectory(clusterDirs[0], maps, issues);
         }
 
         foreach (var portGroup in maps.SelectMany(map => new[]
@@ -888,7 +932,51 @@ public sealed class ArkAsaClusterManager
             issues.Add(new ArkClusterValidationIssue(ArkClusterIssueSeverity.Warning, $"{map.Ark.Basic.MapName} is missing its server executable."));
         }
 
+        foreach (var map in maps.Where(map => string.IsNullOrWhiteSpace(map.Ark.Basic.MapName)))
+        {
+            issues.Add(new ArkClusterValidationIssue(ArkClusterIssueSeverity.Error, $"{map.Ark.Basic.ServerName} must select a map."));
+        }
+
         return new ArkClusterValidationReport(issues);
+    }
+
+    private static void ValidateSharedClusterDirectory(string clusterDir, IReadOnlyList<ArkClusterMapSummary> maps, List<ArkClusterValidationIssue> issues)
+    {
+        try
+        {
+            var fullClusterDir = Path.GetFullPath(clusterDir);
+            var parent = Directory.Exists(fullClusterDir)
+                ? fullClusterDir
+                : Path.GetDirectoryName(fullClusterDir);
+
+            if (string.IsNullOrWhiteSpace(parent) || !Directory.Exists(parent))
+            {
+                issues.Add(new ArkClusterValidationIssue(ArkClusterIssueSeverity.Error, $"Shared cluster directory parent does not exist: {clusterDir}."));
+                return;
+            }
+
+            if (Directory.Exists(fullClusterDir))
+            {
+                var probe = Path.Combine(fullClusterDir, $".nexus-write-test-{Guid.NewGuid():N}.tmp");
+                File.WriteAllText(probe, "test");
+                File.Delete(probe);
+            }
+
+            var containingInstall = maps
+                .Select(map => map.Ark.Basic.InstallPath)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Select(Path.GetFullPath)
+                .FirstOrDefault(path => fullClusterDir.StartsWith(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrWhiteSpace(containingInstall))
+            {
+                issues.Add(new ArkClusterValidationIssue(ArkClusterIssueSeverity.Warning, "Shared cluster directory is inside one server install folder. A neutral shared folder is safer for multi-map clusters."));
+            }
+        }
+        catch (Exception ex)
+        {
+            issues.Add(new ArkClusterValidationIssue(ArkClusterIssueSeverity.Error, $"Shared cluster directory is not writable or creatable: {ex.Message}"));
+        }
     }
 
     private static bool IsArkProfile(ServerProfile profile)

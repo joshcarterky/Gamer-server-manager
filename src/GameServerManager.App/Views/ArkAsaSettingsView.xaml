@@ -306,8 +306,7 @@
                     </Border>
 
                     <Border Style="{StaticResource Panel}"
-                            DataContext="{Binding Cluster}"
-                            Visibility="{Binding DataContext.IsClusterTab, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            Visibility="{Binding IsClusterTab, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <StackPanel>
                             <Grid Margin="0,0,0,12">
                                 <Grid.ColumnDefinitions>
@@ -315,127 +314,63 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
-                                    <TextBlock Text="Cluster Dashboard" Foreground="White" FontSize="18" FontWeight="SemiBold"/>
-                                    <TextBlock Text="{Binding Message}" Style="{StaticResource Label}" Margin="0,4,0,0"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="Cluster" Foreground="White" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        <Border Background="{Binding ClusterStatusColor}" BorderBrush="#4B6F8A" BorderThickness="1" CornerRadius="5" Padding="8,3" Margin="12,0,0,0">
+                                            <TextBlock Text="{Binding ClusterStatusText}" Foreground="White" FontSize="12" FontWeight="SemiBold"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding ClusterStatusMessage}" Style="{StaticResource Label}" Margin="0,6,0,0"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                     <Button Content="Validate" Command="{Binding ValidateCommand}" Style="{StaticResource ActionButton}"/>
-                                    <Button Content="Start Cluster" Command="{Binding StartClusterCommand}" Style="{StaticResource ActionButton}" Background="#246B4A"/>
-                                    <Button Content="Stop Cluster" Command="{Binding StopClusterCommand}" Style="{StaticResource ActionButton}"/>
-                                    <Button Content="Restart" Command="{Binding RestartClusterCommand}" Style="{StaticResource ActionButton}"/>
-                                    <Button Content="Backup" Command="{Binding BackupClusterCommand}" Style="{StaticResource ActionButton}"/>
+                                    <Button Content="Open Cluster Folder" Command="{Binding OpenClusterFolderCommand}" Style="{StaticResource ActionButton}"/>
+                                    <Button Content="Reset" Command="{Binding ResetClusterCommand}" Style="{StaticResource ActionButton}"/>
                                 </StackPanel>
                             </Grid>
 
-                            <UniformGrid Columns="4">
-                                <Border Style="{StaticResource Panel}">
-                                    <StackPanel>
-                                        <TextBlock Text="Cluster ID" Style="{StaticResource Label}"/>
-                                        <TextBox Text="{Binding ClusterId, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}"/>
-                                    </StackPanel>
-                                </Border>
-                                <Border Style="{StaticResource Panel}">
-                                    <StackPanel>
-                                        <TextBlock Text="ClusterDirOverride" Style="{StaticResource Label}"/>
-                                        <TextBox Text="{Binding ClusterDirectoryOverride, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}"/>
-                                    </StackPanel>
-                                </Border>
-                                <Border Style="{StaticResource Panel}">
-                                    <StackPanel>
-                                        <TextBlock Text="Maps / Warnings / Errors" Style="{StaticResource Label}"/>
-                                        <TextBlock Foreground="White" FontSize="22" FontWeight="SemiBold">
-                                            <Run Text="{Binding MapCount, Mode=OneWay}"/><Run Text=" / "/><Run Text="{Binding WarningCount, Mode=OneWay}"/><Run Text=" / "/><Run Text="{Binding ErrorCount, Mode=OneWay}"/>
-                                        </TextBlock>
-                                    </StackPanel>
-                                </Border>
-                                <Border Style="{StaticResource Panel}">
-                                    <StackPanel>
-                                        <TextBlock Text="Shared Backup" Style="{StaticResource Label}"/>
-                                        <CheckBox Content="Enabled for every map" IsChecked="{Binding SharedBackupEnabled}" Foreground="#DDE9F4" Margin="0,8,0,0"/>
-                                    </StackPanel>
-                                </Border>
-                            </UniformGrid>
-
-                            <Border Background="#6618293B" BorderBrush="#334F64" BorderThickness="1" CornerRadius="6" Padding="12" Margin="6">
+                            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                                 <StackPanel>
-                                    <TextBlock Text="Add Map" Foreground="White" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                    <Grid>
+                                    <TextBlock Text="CrossARK Cluster" Foreground="White" FontSize="16" FontWeight="SemiBold"/>
+                                    <CheckBox Content="Enable Cluster" IsChecked="{Binding ClusterEnabled}" Foreground="#DDE9F4" Margin="0,14,0,8"/>
+
+                                    <Grid Margin="0,4,0,0">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="1.2*"/>
-                                            <ColumnDefinition Width="1.2*"/>
-                                            <ColumnDefinition Width="0.8*"/>
-                                            <ColumnDefinition Width="0.8*"/>
-                                            <ColumnDefinition Width="0.8*"/>
+                                            <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <ComboBox ItemsSource="{Binding KnownMaps}" SelectedValue="{Binding SelectedMapName}" SelectedValuePath="InternalName" DisplayMemberPath="DisplayName" Background="#15283A" Foreground="#EAF2FA" BorderBrush="#45647D" Padding="8" Margin="0,0,8,0"/>
-                                        <TextBox Grid.Column="1" Text="{Binding CustomMapName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}" Margin="0,0,8,0" ToolTip="Only used when Custom is selected."/>
-                                        <TextBox Grid.Column="2" Text="{Binding NextGamePort, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}" Margin="0,0,8,0"/>
-                                        <TextBox Grid.Column="3" Text="{Binding NextQueryPort, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}" Margin="0,0,8,0"/>
-                                        <TextBox Grid.Column="4" Text="{Binding NextRconPort, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}" Margin="0,0,8,0"/>
-                                        <Button Grid.Column="5" Content="Add Map" Command="{Binding AddMapCommand}" Style="{StaticResource ActionButton}"/>
+                                        <StackPanel>
+                                            <TextBlock Text="Cluster ID" Style="{StaticResource Label}"/>
+                                            <TextBox Text="{Binding ClusterId, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}" MinHeight="36"/>
+                                            <TextBlock Text="Use the same ID on every server that should transfer together." Style="{StaticResource Label}" Margin="0,5,0,0"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Content="Generate" Command="{Binding GenerateClusterIdCommand}" Style="{StaticResource ActionButton}" VerticalAlignment="Center"/>
+                                    </Grid>
+
+                                    <Grid Margin="0,18,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Cluster Directory Override" Style="{StaticResource Label}"/>
+                                            <TextBox Text="{Binding ClusterDirectoryOverride, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}" MinHeight="36"/>
+                                            <TextBlock Text="All clustered maps must read and write to this same folder." Style="{StaticResource Label}" Margin="0,5,0,0"/>
+                                            <TextBlock Text="{Binding ClusterDirectoryStatusText}" Foreground="#F3B45D" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Content="Browse" Command="{Binding BrowseClusterDirectoryCommand}" Style="{StaticResource ActionButton}" VerticalAlignment="Center"/>
+                                        <Button Grid.Column="2" Content="Create Folder" Command="{Binding CreateClusterDirectoryCommand}" Style="{StaticResource ActionButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>
 
-                            <UniformGrid Columns="4" Margin="0,0,0,8">
-                                <CheckBox Content="No transfer source filtering" IsChecked="{Binding NoTransferFromFiltering}" Foreground="#DDE9F4" Margin="6"/>
-                                <CheckBox Content="Allow tribute downloads" IsChecked="{Binding AllowTributeDownloads}" Foreground="#DDE9F4" Margin="6"/>
-                                <CheckBox Content="Block survivor downloads" IsChecked="{Binding PreventDownloadSurvivors}" Foreground="#DDE9F4" Margin="6"/>
-                                <CheckBox Content="Block item downloads" IsChecked="{Binding PreventDownloadItems}" Foreground="#DDE9F4" Margin="6"/>
-                                <CheckBox Content="Block dino downloads" IsChecked="{Binding PreventDownloadDinos}" Foreground="#DDE9F4" Margin="6"/>
-                                <CheckBox Content="Block survivor uploads" IsChecked="{Binding PreventUploadSurvivors}" Foreground="#DDE9F4" Margin="6"/>
-                                <CheckBox Content="Block item uploads" IsChecked="{Binding PreventUploadItems}" Foreground="#DDE9F4" Margin="6"/>
-                                <CheckBox Content="Block dino uploads" IsChecked="{Binding PreventUploadDinos}" Foreground="#DDE9F4" Margin="6"/>
-                            </UniformGrid>
-
-                            <ItemsControl ItemsSource="{Binding ValidationIssues}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Background="#4418293B" BorderBrush="{Binding Color}" BorderThickness="1" CornerRadius="6" Padding="10" Margin="6,0,6,8">
-                                            <TextBlock Foreground="{Binding Color}" TextWrapping="Wrap">
-                                                <Run Text="{Binding Severity, Mode=OneWay}"/><Run Text=": "/><Run Text="{Binding Message, Mode=OneWay}"/>
-                                            </TextBlock>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-
-                            <ItemsControl ItemsSource="{Binding ClusterMaps}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <UniformGrid Columns="2"/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Style="{StaticResource Panel}">
-                                            <Grid>
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                </Grid.RowDefinitions>
-                                                <DockPanel>
-                                                    <TextBlock Text="{Binding DisplayName}" Foreground="White" FontWeight="SemiBold" FontSize="15"/>
-                                                    <Border DockPanel.Dock="Right" Background="#263A50" CornerRadius="5" Padding="8,3">
-                                                        <TextBlock Text="{Binding StatusText}" Foreground="#DDE9F4" FontSize="11"/>
-                                                    </Border>
-                                                </DockPanel>
-                                                <TextBlock Grid.Row="1" Foreground="#A8B7C8" FontSize="12" Margin="0,8,0,0" TextWrapping="Wrap">
-                                                    <Run Text="Map "/><Run Text="{Binding MapName, Mode=OneWay}"/>
-                                                    <Run Text=" | Save "/><Run Text="{Binding AltSaveDirectoryName, Mode=OneWay}"/>
-                                                    <Run Text=" | Ports "/><Run Text="{Binding GamePort, Mode=OneWay}"/><Run Text="/"/><Run Text="{Binding QueryPort, Mode=OneWay}"/><Run Text="/"/><Run Text="{Binding RconPort, Mode=OneWay}"/>
-                                                </TextBlock>
-                                                <TextBlock Grid.Row="2" Foreground="#A8B7C8" FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap">
-                                                    <Run Text="Cluster "/><Run Text="{Binding ClusterId, Mode=OneWay}"/>
-                                                    <Run Text=" | Backup "/><Run Text="{Binding LastBackup, Mode=OneWay}"/>
-                                                </TextBlock>
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                            <Border Style="{StaticResource Card}" Visibility="{Binding ShowClusterLaunchPreview, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <StackPanel>
+                                    <TextBlock Text="Launch Preview" Foreground="White" FontWeight="SemiBold"/>
+                                    <TextBox Text="{Binding ClusterLaunchPreview, Mode=OneWay}" Style="{StaticResource Input}" FontFamily="Consolas" IsReadOnly="True" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </Border>
 
