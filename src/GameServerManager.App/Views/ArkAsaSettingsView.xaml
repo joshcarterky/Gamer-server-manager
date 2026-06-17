@@ -259,35 +259,6 @@
                     <Border Style="{StaticResource Card}">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <Border Width="52" Height="52" CornerRadius="8" Background="#173B28" BorderBrush="#2D7E55" BorderThickness="1" Margin="0,0,14,0">
-                                <TextBlock Text="ARK" Foreground="#6DFFAE" FontWeight="Bold" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <StackPanel>
-                                <TextBlock Text="{Binding ServerName}" Foreground="White" FontSize="22" FontWeight="SemiBold"/>
-                                <WrapPanel Margin="0,8,0,0">
-                                    <Border Background="#1D3D2B" BorderBrush="#2E8F5C" BorderThickness="1" CornerRadius="5" Padding="8,3" Margin="0,0,6,6"><TextBlock Text="{Binding ServerStatusText}" Foreground="#7DF0A3" FontSize="12" FontWeight="SemiBold"/></Border>
-                                    <Border Background="#16273A" BorderBrush="#2C526E" BorderThickness="1" CornerRadius="5" Padding="8,3" Margin="0,0,6,6"><TextBlock Text="{Binding JoinabilityText}" Foreground="#BFD8EA" FontSize="12"/></Border>
-                                    <Border Background="#16273A" BorderBrush="#2C526E" BorderThickness="1" CornerRadius="5" Padding="8,3" Margin="0,0,6,6"><TextBlock Text="{Binding MapName}" Foreground="#BFD8EA" FontSize="12"/></Border>
-                                    <Border Background="#16273A" BorderBrush="#2C526E" BorderThickness="1" CornerRadius="5" Padding="8,3" Margin="0,0,6,6"><TextBlock Text="{Binding OnlinePlayersText}" Foreground="#BFD8EA" FontSize="12"/></Border>
-                                    <Border Background="#16273A" BorderBrush="#2C526E" BorderThickness="1" CornerRadius="5" Padding="8,3" Margin="0,0,6,6"><TextBlock Text="{Binding ModCountText}" Foreground="#BFD8EA" FontSize="12"/></Border>
-                                    <Border Background="#241D3A" BorderBrush="#604E99" BorderThickness="1" CornerRadius="5" Padding="8,3" Margin="0,0,6,6"><TextBlock Text="{Binding ClusterNameText}" Foreground="#D9CCFF" FontSize="12"/></Border>
-                                </WrapPanel>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
-                                <Button Content="Update Server" Command="{Binding SelectCategoryCommand}" CommandParameter="Install / Update" Style="{StaticResource PrimaryButton}" Margin="0"/>
-                                <Button Content="Open Config" Command="{Binding OpenConfigFolderCommand}" Style="{StaticResource ActionButton}"/>
-                                <Button Content="Backup" Command="{Binding CreateBackupCommand}" Style="{StaticResource ActionButton}"/>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-
-                    <Border Style="{StaticResource Card}">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="220"/>
                                 <ColumnDefinition Width="Auto"/>

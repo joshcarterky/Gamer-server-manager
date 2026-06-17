@@ -1,5 +1,13 @@
 # Release Notes
 
+## v3.3.2
+
+## Fixed
+
+- **ARK ASA Settings** — removed the redundant server context header (ARK badge, server name, status pills, Update Server / Open Config / Backup buttons) that was pinned at the top of the settings content area.
+
+---
+
 ## v3.3.1
 
 ## Changed
