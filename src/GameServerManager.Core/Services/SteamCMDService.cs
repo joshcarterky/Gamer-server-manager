@@ -34,6 +34,7 @@ namespace GameServerManager.Core.Services
 
             Directory.CreateDirectory(_installedDirectory);
             Directory.CreateDirectory(_logDirectory);
+            _isInstalled = File.Exists(Path.Combine(_installedDirectory, SteamCMDFileName));
         }
 
         /// <summary>
@@ -168,6 +169,92 @@ namespace GameServerManager.Core.Services
             }
 
             File.WriteAllText(logFile, logBuilder.ToString());
+        }
+
+        /// <summary>Result of a RunInstallOrUpdateAsync operation.</summary>
+        public sealed record SteamCmdRunResult(int ExitCode, string LogPath, bool Cancelled);
+
+        /// <summary>
+        /// Runs SteamCMD with the given arguments, captures output, and returns the exit code.
+        /// Kills the entire process tree when the cancellation token is triggered.
+        /// </summary>
+        public async Task<SteamCmdRunResult> RunInstallOrUpdateAsync(
+            string arguments,
+            string logFile,
+            IProgress<string>? progress,
+            CancellationToken cancellationToken)
+        {
+            var logBuilder = new StringBuilder();
+            Process? process = null;
+            var killed = false;
+
+            try
+            {
+                process = new Process();
+                process.StartInfo.FileName = Path.Combine(_installedDirectory, SteamCMDFileName);
+                process.StartInfo.Arguments = arguments;
+                process.StartInfo.UseShellExecute = false;
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.RedirectStandardError = true;
+                process.StartInfo.CreateNoWindow = true;
+
+                process.OutputDataReceived += (_, e) =>
+                {
+                    if (e.Data == null) return;
+                    logBuilder.AppendLine(e.Data);
+                    progress?.Report(e.Data);
+                    StatusChanged?.Invoke(this, e.Data);
+                    LogOutput?.Invoke(this, e.Data);
+                };
+
+                process.ErrorDataReceived += (_, e) =>
+                {
+                    if (e.Data == null) return;
+                    logBuilder.AppendLine($"[stderr] {e.Data}");
+                };
+
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
+                StatusChanged?.Invoke(this, $"SteamCMD started (PID {process.Id})");
+
+                using var reg = cancellationToken.Register(() =>
+                {
+                    try
+                    {
+                        if (!process.HasExited)
+                        {
+                            killed = true;
+                            process.Kill(entireProcessTree: true);
+                        }
+                    }
+                    catch { }
+                });
+
+                await process.WaitForExitAsync(CancellationToken.None);
+
+                var dir = Path.GetDirectoryName(logFile);
+                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                File.WriteAllText(logFile, logBuilder.ToString());
+
+                return new SteamCmdRunResult(process.ExitCode, logFile, killed || cancellationToken.IsCancellationRequested);
+            }
+            catch
+            {
+                try
+                {
+                    var dir = Path.GetDirectoryName(logFile);
+                    if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                    File.WriteAllText(logFile, logBuilder.ToString());
+                }
+                catch { }
+                return new SteamCmdRunResult(-1, logFile, killed || cancellationToken.IsCancellationRequested);
+            }
+            finally
+            {
+                process?.Dispose();
+            }
         }
 
         /// <summary>

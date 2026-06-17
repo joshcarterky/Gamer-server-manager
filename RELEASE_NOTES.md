@@ -1,5 +1,27 @@
 # Release Notes
 
+## v3.3.0
+
+## Added
+
+- **Install / Update workflow** — the "Install / Update" option in the server card's `⋯` menu now opens a dedicated overlay panel instead of doing nothing. The panel shows the server name, install path, and mode (Install vs Update detected from whether the server executable already exists).
+- **SteamCMD integration** — installs SteamCMD automatically on first use, then runs `+app_update {appId} [validate] +quit` with the correct arguments per provider. Proper process management: stderr captured, exit code checked, entire process tree killed on cancel.
+- **Install progress overlay** — live SteamCMD output streams into a scrolling console area inside the overlay. An indeterminate progress bar shows while SteamCMD runs.
+- **Install / Update options** — "Validate files" checkbox (repairs corrupt installs) and "Restart server after successful update" checkbox in the confirmation step.
+- **Install result panel** — after completion shows a colour-coded success (green) or failure (red) message, with an "Open Log" button to inspect the full SteamCMD output written to `Logs/steaminstall_*.txt`.
+- **Running-server guard** — if the server is running when Install / Update is triggered, the user is prompted to stop it first; the update only proceeds after confirmation.
+- **Per-server operation lock** — prevents launching a second install/update while one is already in progress for the same server.
+- **`ServerInstallService`** — new service in `GameServerManager.Services` that owns the coordinator logic: validation, SteamCMD argument building, progress reporting, log writing, and structured result.
+- **Install validation tests** — new `TestServerInstallServiceValidationAsync` in the provider test suite covers empty-path rejection, feature-flag checks, and ARK ASA App ID correctness.
+
+## Fixed
+
+- Fixed `SteamCMDService` always reporting `IsInstalled = false` even when `steamcmd.exe` was already on disk (constructor now checks for the file on startup).
+- Fixed `SteamCMDService.InstallServerAsync` / `UpdateServerAsync` building commands that were missing `+app_update {AppId}` — SteamCMD would log in and quit without downloading anything.
+- Fixed `CanStart` on server cards allowing the Start button while a server was in `Starting`, `Updating`, `Restarting`, or `Stopping` state, or while busy.
+
+---
+
 ## v3.2.1
 
 ## Changed

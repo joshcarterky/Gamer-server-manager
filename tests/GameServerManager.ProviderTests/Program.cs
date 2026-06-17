@@ -82,6 +82,7 @@ TestArkSettingsRedesignContracts();
 TestDiagnosticsMaskSecrets();
 TestPortableModeDetection();
 TestReleaseVersionStamp();
+await TestServerInstallServiceValidationAsync();
 
 Console.WriteLine("Provider and server data tests passed.");
 
@@ -841,5 +842,45 @@ static void Assert(bool condition, string message)
     if (!condition)
     {
         throw new InvalidOperationException(message);
+    }
+}
+
+static async Task TestServerInstallServiceValidationAsync()
+{
+    var registry2 = GameProviderRegistry.CreateDefault();
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var paths = new AppDataPaths(tempRoot);
+        using var installService = new ServerInstallService(paths);
+
+        // ARK ASA must declare SteamCmdInstall and carry the right AppId
+        Assert(registry2.TryGetProvider("ark-survival-ascended", out var arkProvider), "ARK ASA provider must be registered.");
+        Assert(arkProvider!.SupportedFeatures.HasFlag(GameServerFeatures.SteamCmdInstall), "ARK ASA must declare SteamCmdInstall feature.");
+        Assert(arkProvider.SteamAppId.HasValue, "ARK ASA must have a Steam App ID.");
+        Assert(arkProvider.SteamAppId == 2430930, "ARK ASA Steam App ID must be 2430930.");
+
+        // Missing install path → validation failure (no SteamCMD launched)
+        var noPathProfile = new ServerProfile { Id = "install-test-1", ServerName = "NoPath" };
+        var r1 = await installService.InstallOrUpdateAsync(noPathProfile, arkProvider, false, null, default);
+        Assert(!r1.Success && !r1.Cancelled, "Must fail when InstallPath is empty.");
+        Assert(r1.Message.Contains("path", StringComparison.OrdinalIgnoreCase), "Error must mention install path.");
+
+        // Provider without SteamCmdInstall feature → validation failure
+        Assert(registry2.TryGetProvider("minecraft_java", out var mcProvider), "Minecraft Java provider must be registered.");
+        if (!mcProvider!.SupportedFeatures.HasFlag(GameServerFeatures.SteamCmdInstall))
+        {
+            var mcProfile = new ServerProfile { Id = "install-test-2", ServerName = "MC", InstallPath = tempRoot };
+            var r2 = await installService.InstallOrUpdateAsync(mcProfile, mcProvider, false, null, default);
+            Assert(!r2.Success, "Must fail for provider without SteamCmdInstall feature.");
+            Assert(r2.Message.Contains("SteamCMD", StringComparison.OrdinalIgnoreCase), "Error must mention SteamCMD.");
+        }
+
+        // No active operations before anything runs
+        Assert(!installService.IsOperationActive("any-id"), "No install operation should be active before a run.");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
     }
 }

@@ -1221,6 +1221,137 @@
             </Border>
         </Border>
 
+        <!-- ═══ OVERLAY — Install / Update ════════════════════════════════════ -->
+        <Border Grid.RowSpan="4"
+                Panel.ZIndex="80"
+                Background="#C4040A14"
+                Visibility="{Binding IsInstallOpen, Converter={StaticResource BoolToVis}}">
+            <Border Style="{StaticResource OverlayPanel}"
+                    Width="820" MaxWidth="960"
+                    Padding="24" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel>
+
+                    <!-- Header -->
+                    <TextBlock Text="Install / Update Server"
+                               Foreground="White" FontSize="20" FontWeight="SemiBold"/>
+                    <TextBlock Foreground="#6A8BA4" FontSize="13" Margin="0,4,0,18">
+                        <Run Text="{Binding InstallModeLabel, Mode=OneWay}"/>
+                        <Run Text=" via SteamCMD  ·  "/>
+                        <Run Text="{Binding InstallTargetGame, Mode=OneWay}"/>
+                    </TextBlock>
+
+                    <!-- Server info row -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Server" Foreground="#3A5468" FontSize="11" FontWeight="SemiBold" Margin="0,0,12,8"/>
+                        <TextBlock Grid.Column="1" Text="{Binding InstallTargetName, Mode=OneWay}"
+                                   Foreground="#E0EEFA" FontSize="13" Margin="0,0,0,8"/>
+                        <TextBlock Grid.Row="1" Text="Install path" Foreground="#3A5468" FontSize="11" FontWeight="SemiBold" Margin="0,0,12,0"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding InstallTargetPath, Mode=OneWay}"
+                                   Foreground="#8AA8C0" FontSize="12" TextWrapping="Wrap"/>
+                    </Grid>
+
+                    <!-- ── Confirm section ─────────────────────────────────── -->
+                    <StackPanel Visibility="{Binding IsInstallConfirm, Converter={StaticResource BoolToVis}}">
+                        <Border Background="#0C1A28" BorderBrush="#1A3448" BorderThickness="1"
+                                CornerRadius="6" Padding="14" Margin="0,0,0,14">
+                            <StackPanel>
+                                <CheckBox Content="Validate files (repairs corrupt or incomplete installation)"
+                                          IsChecked="{Binding InstallValidateFiles, Mode=TwoWay}"
+                                          Foreground="#D0E4F4" Margin="0,0,0,10"/>
+                                <CheckBox Content="Restart server automatically after a successful update"
+                                          IsChecked="{Binding InstallRestartAfter, Mode=TwoWay}"
+                                          Foreground="#D0E4F4"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#0B1822" BorderBrush="#1A2E3E" BorderThickness="1"
+                                CornerRadius="6" Padding="12" Margin="0,0,0,18">
+                            <TextBlock Foreground="#C89048" FontSize="12" TextWrapping="Wrap">
+                                <Run Text="This will download "/>
+                                <Run Text="{Binding InstallModeLabel, Mode=OneWay}"/>
+                                <Run Text=" files from Steam. The server must not be running during this operation."/>
+                            </TextBlock>
+                        </Border>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="Cancel" Command="{Binding CloseInstallCommand, Mode=OneWay}" Style="{StaticResource BtnBase}"/>
+                            <Button Command="{Binding StartInstallCommand, Mode=OneWay}"
+                                    Style="{StaticResource BtnPrimary}" Margin="6,0,0,0">
+                                <Button.Content>
+                                    <TextBlock>
+                                        <Run Text="⬇  "/>
+                                        <Run Text="{Binding InstallModeLabel, Mode=OneWay}"/>
+                                    </TextBlock>
+                                </Button.Content>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- ── Progress section ────────────────────────────────── -->
+                    <StackPanel Visibility="{Binding IsInstallRunning, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="{Binding InstallStage, Mode=OneWay}"
+                                   Foreground="#D0E4F4" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                        <ProgressBar IsIndeterminate="True" Height="6" Margin="0,0,0,12"/>
+                        <Border Background="#060E18" BorderBrush="#1A2E42" BorderThickness="1"
+                                CornerRadius="6" Padding="12" Margin="0,0,0,16" MinHeight="48" MaxHeight="140">
+                            <ScrollViewer VerticalScrollBarVisibility="Hidden">
+                                <TextBlock Text="{Binding InstallCurrentLine, Mode=OneWay}"
+                                           Foreground="#6A9AB8" FontFamily="Consolas" FontSize="12"
+                                           TextWrapping="Wrap"/>
+                            </ScrollViewer>
+                        </Border>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="⛔  Cancel" Command="{Binding CancelInstallCommand, Mode=OneWay}" Style="{StaticResource BtnBase}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- ── Result section ──────────────────────────────────── -->
+                    <StackPanel Visibility="{Binding IsInstallComplete, Converter={StaticResource BoolToVis}}">
+                        <Border CornerRadius="6" Padding="14" Margin="0,0,0,16">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#0B2010"/>
+                                    <Setter Property="BorderBrush" Value="#1A4A28"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsInstallSuccess}" Value="False">
+                                            <Setter Property="Background" Value="#200C0C"/>
+                                            <Setter Property="BorderBrush" Value="#4A1A1A"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding InstallResultMessage, Mode=OneWay}"
+                                       FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#3DDA85"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsInstallSuccess}" Value="False">
+                                                <Setter Property="Foreground" Value="#E87070"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="✕  Close" Command="{Binding CloseInstallCommand, Mode=OneWay}" Style="{StaticResource BtnBase}"/>
+                            <Button Content="📋  Open Log" Command="{Binding OpenInstallLogCommand, Mode=OneWay}"
+                                    Style="{StaticResource BtnBase}" Margin="6,0,0,0"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                </StackPanel>
+            </Border>
+        </Border>
+
         <!-- ═══ OVERLAY — Console log ════════════════════════════════════════ -->
         <Border Grid.RowSpan="4"
                 Panel.ZIndex="70"

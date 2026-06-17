@@ -293,7 +293,7 @@ public class ServerCardViewModel : BaseViewModel
         _ => "#A8B7C8"
     };
 
-    public bool CanStart => Status != ServerStatus.Running;
+    public bool CanStart => Status is not (ServerStatus.Running or ServerStatus.Starting or ServerStatus.Updating or ServerStatus.Restarting or ServerStatus.Stopping) && !IsBusy;
     public bool CanStop => Status == ServerStatus.Running;
 
     // ── Warnings ─────────────────────────────────────────────────────────────
@@ -336,6 +336,7 @@ public class ServerCardViewModel : BaseViewModel
     {
         BusyText = text;
         IsBusy = !string.IsNullOrWhiteSpace(text);
+        OnPropertyChanged(nameof(CanStart));
     }
 
     public void RefreshStatus()

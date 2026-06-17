@@ -55,6 +55,7 @@ public class ServersViewModel : BaseViewModel, IDisposable
     private readonly ServerImportDetector _importDetector;
     private readonly ServerImportService _importService;
     private readonly ServerProfileValidator _profileValidator;
+    private readonly ServerInstallService _installService;
     private readonly DispatcherTimer _refreshTimer;
     private bool _isMonitoringRefreshRunning;
     private string _searchText = string.Empty;
@@ -79,6 +80,19 @@ public class ServersViewModel : BaseViewModel, IDisposable
     private ServerCardViewModel? _consoleServer;
     private ServerProfile? _pendingImportProfile;
     private CancellationTokenSource? _importCancellation;
+    // Install / Update panel state
+    private bool _isInstallOpen;
+    private bool _isInstallRunning;
+    private bool _isInstallComplete;
+    private bool _isInstallSuccess;
+    private bool _installValidateFiles = true;
+    private bool _installRestartAfter;
+    private string _installStage = string.Empty;
+    private string _installCurrentLine = string.Empty;
+    private string _installResultMessage = string.Empty;
+    private string _installLogPath = string.Empty;
+    private ServerCardViewModel? _installTarget;
+    private CancellationTokenSource? _installCts;
 
     public ServersViewModel()
     {
@@ -91,6 +105,7 @@ public class ServersViewModel : BaseViewModel, IDisposable
         _importDetector = new ServerImportDetector(_providers);
         _importService = new ServerImportService(paths);
         _profileValidator = new ServerProfileValidator();
+        _installService = new ServerInstallService(paths);
         AddServer = new AddServerWizardViewModel(_providers.Providers);
 
         ProviderFilters = new ObservableCollection<GameFilterOption>(
@@ -136,6 +151,10 @@ public class ServersViewModel : BaseViewModel, IDisposable
         BackupNowCommand = new RelayCommand(async profile => await BackupNowAsync(profile as ServerCardViewModel));
         CloseConsoleCommand = new RelayCommand(_ => IsConsoleOpen = false);
         RefreshConsoleCommand = new RelayCommand(_ => RefreshConsoleText());
+        StartInstallCommand = new RelayCommand(async _ => await StartInstallAsync());
+        CancelInstallCommand = new RelayCommand(_ => _installCts?.Cancel());
+        CloseInstallCommand = new RelayCommand(_ => CloseInstall());
+        OpenInstallLogCommand = new RelayCommand(_ => OpenInstallLog());
         BrowseServerPathCommand = new RelayCommand(_ => BrowseFolder(path => AddServer.ServerPath = path, AddServer.ServerPath));
         BrowseInstallPathCommand = new RelayCommand(_ => BrowseFolder(path => AddServer.InstallPath = path, AddServer.InstallPath));
         BrowseExecutablePathCommand = new RelayCommand(_ => BrowseExecutable(path => AddServer.ExecutablePath = path, AddServer.ExecutablePath));
@@ -180,6 +199,10 @@ public class ServersViewModel : BaseViewModel, IDisposable
     public RelayCommand BackupNowCommand { get; }
     public RelayCommand CloseConsoleCommand { get; }
     public RelayCommand RefreshConsoleCommand { get; }
+    public RelayCommand StartInstallCommand { get; }
+    public RelayCommand CancelInstallCommand { get; }
+    public RelayCommand CloseInstallCommand { get; }
+    public RelayCommand OpenInstallLogCommand { get; }
     public RelayCommand BrowseServerPathCommand { get; }
     public RelayCommand BrowseInstallPathCommand { get; }
     public RelayCommand BrowseExecutablePathCommand { get; }
@@ -361,6 +384,86 @@ public class ServersViewModel : BaseViewModel, IDisposable
         get => _consoleText;
         set => SetProperty(ref _consoleText, value);
     }
+
+    // ── Install / Update panel ─────────────────────────────────────────────────
+    public bool IsInstallOpen
+    {
+        get => _isInstallOpen;
+        private set => SetProperty(ref _isInstallOpen, value);
+    }
+
+    public bool IsInstallRunning
+    {
+        get => _isInstallRunning;
+        private set => SetProperty(ref _isInstallRunning, value);
+    }
+
+    public bool IsInstallComplete
+    {
+        get => _isInstallComplete;
+        private set => SetProperty(ref _isInstallComplete, value);
+    }
+
+    public bool IsInstallSuccess
+    {
+        get => _isInstallSuccess;
+        private set => SetProperty(ref _isInstallSuccess, value);
+    }
+
+    public bool IsInstallConfirm => IsInstallOpen && !IsInstallRunning && !IsInstallComplete;
+
+    public bool InstallValidateFiles
+    {
+        get => _installValidateFiles;
+        set => SetProperty(ref _installValidateFiles, value);
+    }
+
+    public bool InstallRestartAfter
+    {
+        get => _installRestartAfter;
+        set => SetProperty(ref _installRestartAfter, value);
+    }
+
+    public string InstallStage
+    {
+        get => _installStage;
+        private set => SetProperty(ref _installStage, value);
+    }
+
+    public string InstallCurrentLine
+    {
+        get => _installCurrentLine;
+        private set => SetProperty(ref _installCurrentLine, value);
+    }
+
+    public string InstallResultMessage
+    {
+        get => _installResultMessage;
+        private set => SetProperty(ref _installResultMessage, value);
+    }
+
+    public string InstallLogPath
+    {
+        get => _installLogPath;
+        private set => SetProperty(ref _installLogPath, value);
+    }
+
+    public ServerCardViewModel? InstallTarget
+    {
+        get => _installTarget;
+        private set => SetProperty(ref _installTarget, value);
+    }
+
+    public string InstallTargetName => _installTarget?.ServerName ?? string.Empty;
+    public string InstallTargetGame => _installTarget?.GameName ?? string.Empty;
+    public string InstallTargetPath => _installTarget?.Profile.InstallPath ?? string.Empty;
+
+    public bool IsInstallFirstTime =>
+        _installTarget != null &&
+        !string.IsNullOrWhiteSpace(_installTarget.Profile.InstallPath) &&
+        !File.Exists(Path.Combine(_installTarget.Profile.InstallPath, _installTarget.Provider.ExecutableRelativePath));
+
+    public string InstallModeLabel => IsInstallFirstTime ? "Install" : "Update";
 
     private async Task LoadAsync()
     {
@@ -671,17 +774,146 @@ public class ServersViewModel : BaseViewModel, IDisposable
 
     private void UpdateServer(ServerCardViewModel? server)
     {
-        if (server == null)
+        if (server == null) return;
+
+        if (_installService.IsOperationActive(server.Profile.Id))
         {
+            Message = $"Install or update already in progress for {server.ServerName}.";
             return;
         }
 
-        MessageBox.Show(
-            "Not implemented yet: the update manager will run provider-specific updates and show progress here.",
-            "Update Manager",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
-        Message = $"Update manager is not implemented yet for {server.ServerName}.";
+        InstallTarget = server;
+        InstallValidateFiles = true;
+        InstallRestartAfter = false;
+        _installStage = string.Empty;
+        _installCurrentLine = string.Empty;
+        _installResultMessage = string.Empty;
+        _installLogPath = string.Empty;
+        SetInstallPanelState(open: true, running: false, complete: false, success: false);
+    }
+
+    private void SetInstallPanelState(bool open, bool running, bool complete, bool success)
+    {
+        IsInstallOpen = open;
+        IsInstallRunning = running;
+        IsInstallComplete = complete;
+        IsInstallSuccess = success;
+        OnPropertyChanged(nameof(IsInstallConfirm));
+        OnPropertyChanged(nameof(IsInstallFirstTime));
+        OnPropertyChanged(nameof(InstallModeLabel));
+        OnPropertyChanged(nameof(InstallTargetName));
+        OnPropertyChanged(nameof(InstallTargetGame));
+        OnPropertyChanged(nameof(InstallTargetPath));
+    }
+
+    private async Task StartInstallAsync()
+    {
+        if (IsInstallRunning || _installTarget == null) return;
+
+        var server = _installTarget;
+
+        if (server.Status == ServerStatus.Running)
+        {
+            var answer = MessageBox.Show(
+                $"'{server.ServerName}' is currently running. Stop it now before updating?",
+                "Server Running",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (answer != MessageBoxResult.Yes)
+            {
+                Message = $"Update cancelled — {server.ServerName} is still running.";
+                CloseInstall();
+                return;
+            }
+
+            try
+            {
+                server.SetBusy("Stopping...");
+                await _processService.StopServerAsync(server.Profile);
+                await _serversJsonService.UpdateServerAsync(server.Profile);
+            }
+            catch (Exception ex)
+            {
+                Message = $"Could not stop {server.ServerName}: {ex.Message}";
+                server.SetBusy(string.Empty);
+                CloseInstall();
+                return;
+            }
+            finally
+            {
+                server.SetBusy(string.Empty);
+            }
+        }
+
+        SetInstallPanelState(open: true, running: true, complete: false, success: false);
+        server.Profile.Status = ServerStatus.Updating;
+        server.RefreshProfileFields();
+
+        _installCts = new CancellationTokenSource();
+
+        var progress = new Progress<ServerInstallProgress>(p =>
+        {
+            InstallStage = p.Stage;
+            InstallCurrentLine = p.StatusLine;
+        });
+
+        try
+        {
+            var result = await _installService.InstallOrUpdateAsync(
+                server.Profile,
+                server.Provider,
+                InstallValidateFiles,
+                progress,
+                _installCts.Token);
+
+            InstallResultMessage = result.Message;
+            InstallLogPath = result.LogPath;
+            SetInstallPanelState(open: true, running: false, complete: true, success: result.Success);
+
+            server.Profile.Status = ServerStatus.Stopped;
+            server.RefreshProfileFields();
+            await _serversJsonService.UpdateServerAsync(server.Profile);
+            await RefreshMonitoringAsync();
+
+            Message = result.Success
+                ? $"Install complete: {result.Message}"
+                : $"Install failed: {result.Message}";
+
+            if (result.Success && InstallRestartAfter)
+            {
+                CloseInstall();
+                await StartAsync(server);
+            }
+        }
+        catch (Exception ex)
+        {
+            InstallResultMessage = $"Unexpected error: {ex.Message}";
+            InstallLogPath = string.Empty;
+            SetInstallPanelState(open: true, running: false, complete: true, success: false);
+            server.Profile.Status = ServerStatus.Stopped;
+            server.RefreshProfileFields();
+            Message = $"Install error: {ex.Message}";
+        }
+        finally
+        {
+            _installCts?.Dispose();
+            _installCts = null;
+        }
+    }
+
+    private void CloseInstall()
+    {
+        _installCts?.Cancel();
+        InstallTarget = null;
+        SetInstallPanelState(open: false, running: false, complete: false, success: false);
+    }
+
+    private void OpenInstallLog()
+    {
+        if (!string.IsNullOrEmpty(InstallLogPath) && File.Exists(InstallLogPath))
+        {
+            Process.Start(new ProcessStartInfo { FileName = InstallLogPath, UseShellExecute = true });
+        }
     }
 
     private void OpenFiles(ServerCardViewModel? server)
@@ -1063,5 +1295,8 @@ public class ServersViewModel : BaseViewModel, IDisposable
     {
         _refreshTimer.Stop();
         _processService.Dispose();
+        _installService.Dispose();
+        _installCts?.Cancel();
+        _installCts?.Dispose();
     }
 }
