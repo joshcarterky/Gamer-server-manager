@@ -6,6 +6,7 @@ using GameServerManager.Services.Configuration;
 using GameServerManager.Services.Diagnostics;
 using GameServerManager.Services.Repositories;
 using GameServerManager.Services.Updates;
+using System.Xml.Linq;
 
 var registry = GameProviderRegistry.CreateDefault();
 var expectedGameIds = new[]
@@ -73,6 +74,7 @@ TestSettingsUpdateSeparation();
 TestArkSettingsRedesignContracts();
 TestDiagnosticsMaskSecrets();
 TestPortableModeDetection();
+TestReleaseVersionStamp();
 
 Console.WriteLine("Provider and server data tests passed.");
 
@@ -502,6 +504,40 @@ static void TestPortableModeDetection()
     {
         DeleteTempRoot(tempRoot);
     }
+}
+
+static void TestReleaseVersionStamp()
+{
+    var root = FindRepositoryRoot();
+    var version = File.ReadAllText(Path.Combine(root, "VERSION")).Trim().TrimStart('v');
+    var props = XDocument.Load(Path.Combine(root, "Directory.Build.props"));
+    var propertyGroup = props.Root?.Element("PropertyGroup")
+        ?? throw new InvalidOperationException("Directory.Build.props is missing PropertyGroup.");
+
+    var versionPrefix = propertyGroup.Element("VersionPrefix")?.Value;
+    var assemblyVersion = propertyGroup.Element("AssemblyVersion")?.Value;
+    var fileVersion = propertyGroup.Element("FileVersion")?.Value;
+
+    Assert(versionPrefix == version, "Directory.Build.props VersionPrefix must match VERSION.");
+    Assert(assemblyVersion == $"{version}.0", "Directory.Build.props AssemblyVersion must match VERSION.");
+    Assert(fileVersion == $"{version}.0", "Directory.Build.props FileVersion must match VERSION.");
+}
+
+static string FindRepositoryRoot()
+{
+    var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+    while (directory is not null)
+    {
+        if (File.Exists(Path.Combine(directory.FullName, "VERSION"))
+            && File.Exists(Path.Combine(directory.FullName, "Directory.Build.props")))
+        {
+            return directory.FullName;
+        }
+
+        directory = directory.Parent;
+    }
+
+    throw new DirectoryNotFoundException("Could not find repository root.");
 }
 
 static ServerProfile CreateTestProfile(string id, string serverName)

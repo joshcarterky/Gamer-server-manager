@@ -26,19 +26,33 @@ public class AppSettingsService
     {
         if (!File.Exists(SettingsPath))
         {
-            var defaults = new AppSettings();
+            var defaults = NormalizeVersion(new AppSettings());
             await SaveAsync(defaults);
             return defaults;
         }
 
-        await using var stream = File.OpenRead(SettingsPath);
-        var settings = await JsonSerializer.DeserializeAsync<AppSettings>(stream, _jsonOptions);
-        return settings ?? new AppSettings();
+        AppSettings? settings;
+        await using (var stream = File.OpenRead(SettingsPath))
+        {
+            settings = await JsonSerializer.DeserializeAsync<AppSettings>(stream, _jsonOptions);
+        }
+
+        settings ??= new AppSettings();
+        var previousVersion = settings.Version;
+        NormalizeVersion(settings);
+
+        if (!string.Equals(previousVersion, settings.Version, StringComparison.OrdinalIgnoreCase))
+        {
+            await SaveAsync(settings);
+        }
+
+        return settings;
     }
 
     public async Task SaveAsync(AppSettings settings)
     {
         Directory.CreateDirectory(_paths.SettingsDirectory);
+        NormalizeVersion(settings);
         settings.LastModifiedUtc = DateTime.UtcNow;
 
         await using var stream = File.Create(SettingsPath);
@@ -47,7 +61,7 @@ public class AppSettingsService
 
     public async Task<AppSettings> ResetAsync()
     {
-        var defaults = new AppSettings();
+        var defaults = NormalizeVersion(new AppSettings());
         await SaveAsync(defaults);
         return defaults;
     }
@@ -74,7 +88,14 @@ public class AppSettingsService
         var settings = await JsonSerializer.DeserializeAsync<AppSettings>(stream, _jsonOptions)
             ?? throw new InvalidOperationException("The settings import file is empty or invalid.");
 
+        NormalizeVersion(settings);
         await SaveAsync(settings);
+        return settings;
+    }
+
+    private static AppSettings NormalizeVersion(AppSettings settings)
+    {
+        settings.Version = AppVersion.Current;
         return settings;
     }
 }

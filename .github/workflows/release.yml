@@ -57,3 +57,4 @@ jobs:
           files: releases/${{ github.ref_name }}/public/*
           body_path: releases/${{ github.ref_name }}/RELEASE_BODY.md
           prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+          overwrite_files: true
