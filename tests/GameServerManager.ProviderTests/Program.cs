@@ -289,21 +289,46 @@ static async Task TestArkSurvivalAscendedAsync()
         mapper.HydratePaths(arkProfile);
         Directory.CreateDirectory(arkProfile.Paths.ConfigPath);
         Directory.CreateDirectory(arkProfile.Paths.SavesPath);
-        File.WriteAllText(arkProfile.Paths.GameUserSettingsPath, "; keep me\r\n[ServerSettings]\r\nUnknownKey=Keep\r\nServerPVE=False\r\n");
-        File.WriteAllText(arkProfile.Paths.GameIniPath, "[/script/shootergame.shootergamemode]\r\nConfigAddNPCSpawnEntriesContainer=(Foo=1)\r\nConfigAddNPCSpawnEntriesContainer=(Bar=2)\r\n");
+        File.WriteAllText(arkProfile.Paths.GameUserSettingsPath, "; keep me\r\n[ServerSettings]\r\nUnknownKey=Keep\r\nServerPVE=False\r\nTamingSpeedMultiplier=5.5\r\nserverpve=True\r\n");
+        File.WriteAllText(arkProfile.Paths.GameIniPath, "[/script/shootergame.shootergamemode]\r\nMatingIntervalMultiplier=0.25\r\nConfigAddNPCSpawnEntriesContainer=(Foo=1)\r\nConfigAddNPCSpawnEntriesContainer=(Bar=2)\r\n");
         File.WriteAllText(Path.Combine(arkProfile.Paths.SavesPath, "TheIsland.ark"), "save");
+
+        var state = await new ArkAsaConfigurationStateService().LoadAsync("ark-asa-test", arkProfile);
+        Assert(state.GameUserSettingsPath == arkProfile.Paths.GameUserSettingsPath, "ARK state should read the selected server GameUserSettings.ini path.");
+        Assert(arkProfile.GameUserSettings.ServerSettings["TamingSpeedMultiplier"] == "5.5", "Existing GameUserSettings.ini values should hydrate visual settings state.");
+        Assert(arkProfile.GameUserSettings.ServerSettings["ServerPVE"] == "True", "Case-insensitive duplicate scalar keys should resolve to the last saved value.");
+        Assert(arkProfile.GameIni.ShooterGameModeSettings["MatingIntervalMultiplier"] == "0.25", "Existing Game.ini values should hydrate visual settings state.");
+        Assert(arkProfile.GameIni.RepeatedSettings["ConfigAddNPCSpawnEntriesContainer"].Count == 2, "Repeated Game.ini values should hydrate as ordered repeated state.");
+
+        var rawEditedState = new ArkAsaConfigurationStateService().LoadFromRawText(
+            "ark-asa-test",
+            arkProfile,
+            state.GameUserSettingsRawText.Replace("TamingSpeedMultiplier=5.5", "TamingSpeedMultiplier=8.25", StringComparison.Ordinal),
+            state.GameIniRawText.Replace("MatingIntervalMultiplier=0.25", "MatingIntervalMultiplier=0.05", StringComparison.Ordinal));
+        Assert(rawEditedState.PendingValues.Any(entry => entry.Value == "8.25"), "Raw GameUserSettings.ini edit should update pending visual state.");
+        Assert(arkProfile.GameIni.ShooterGameModeSettings["MatingIntervalMultiplier"] == "0.05", "Raw Game.ini edit should update pending visual state.");
 
         var document = await IniDocument.LoadAsync(arkProfile.Paths.GameIniPath);
         Assert(document.GetValues(ArkAsaSettingRegistry.GameModeSection, "ConfigAddNPCSpawnEntriesContainer").Count == 2, "INI parser should preserve repeated array settings.");
         document.SetValue(ArkAsaSettingRegistry.GameModeSection, "DinoCountMultiplier", "1.5");
         Assert(document.Render().Contains("ConfigAddNPCSpawnEntriesContainer=(Foo=1)", StringComparison.Ordinal), "INI writer should preserve unknown repeated lines.");
 
-        arkProfile.GameUserSettings.ServerSettings["ServerPVE"] = "True";
+        arkProfile.GameUserSettings.ServerSettings["ServerPVE"] = "False";
+        arkProfile.GameUserSettings.ServerSettings["TamingSpeedMultiplier"] = "9.75";
+        arkProfile.GameIni.ShooterGameModeSettings["MatingIntervalMultiplier"] = "0.15";
         arkProfile.GameIni.RepeatedSettings["ConfigAddNPCSpawnEntriesContainer"] = new List<string> { "(Foo=1)", "(Bar=2)" };
         await new ArkAsaConfigService().SaveAsync(arkProfile);
         var savedGus = File.ReadAllText(arkProfile.Paths.GameUserSettingsPath);
+        var savedGame = File.ReadAllText(arkProfile.Paths.GameIniPath);
         Assert(savedGus.Contains("; keep me", StringComparison.Ordinal), "Config save should preserve comments.");
         Assert(savedGus.Contains("UnknownKey=Keep", StringComparison.Ordinal), "Config save should preserve unknown settings.");
+        Assert(savedGus.Contains("TamingSpeedMultiplier=9.75", StringComparison.Ordinal), "Visual GameUserSettings.ini change should save to GameUserSettings.ini.");
+        Assert(!savedGus.Contains("MatingIntervalMultiplier=0.15", StringComparison.Ordinal), "Game.ini setting should not be written to GameUserSettings.ini.");
+        Assert(savedGame.Contains("MatingIntervalMultiplier=0.15", StringComparison.Ordinal), "Visual Game.ini change should save to Game.ini.");
+        Assert(!savedGame.Contains("TamingSpeedMultiplier=9.75", StringComparison.Ordinal), "GameUserSettings.ini setting should not be written to Game.ini.");
+        Assert(savedGame.Contains("ConfigAddNPCSpawnEntriesContainer=(Foo=1)", StringComparison.Ordinal), "Repeated Game.ini entries should be preserved after unrelated saves.");
+        Assert(savedGame.Contains("ConfigAddNPCSpawnEntriesContainer=(Bar=2)", StringComparison.Ordinal), "Repeated Game.ini entries should preserve order after unrelated saves.");
+        Assert((await IniDocument.LoadAsync(arkProfile.Paths.GameUserSettingsPath)).GetValues(ArkAsaSettingRegistry.ServerSettingsSection, "ServerPVE").Count == 1, "Duplicate scalar keys should not be created after save.");
         Assert(Directory.EnumerateFiles(arkProfile.Paths.ConfigPath, "*.bak").Any(), "Config save should create backups.");
 
         var backup = await new ArkAsaBackupService().CreateBackupAsync(arkProfile, "test backup");

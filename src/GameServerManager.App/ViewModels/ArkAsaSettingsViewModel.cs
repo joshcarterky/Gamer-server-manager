@@ -6,6 +6,7 @@ using GameServerManager.Core.Models;
 using GameServerManager.GameProviders;
 using GameServerManager.Services;
 using GameServerManager.Services.ArkSurvivalAscended;
+using GameServerManager.Services.Configuration;
 using GameServerManager.Services.CurseForge;
 using Microsoft.Win32;
 
@@ -16,7 +17,9 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
     private readonly ServersJsonService _serversJsonService = new(new AppDataPaths());
     private readonly ArkAsaProfileMapper _mapper = new();
     private readonly ArkAsaLaunchBuilder _launchBuilder = new();
+    private readonly ArkAsaConfigurationStateService _configurationStateService = new();
     private ArkSurvivalAscendedServerProfile _profile = new();
+    private ArkServerConfigurationState? _configurationState;
     private string _searchText = string.Empty;
     private bool _showAdvanced;
     private string _selectedTab = "Overview";
@@ -29,6 +32,10 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
     private int _validationErrorCount;
     private int _validationWarningCount;
     private bool _revealSensitiveRawValues;
+    private bool _syncingRawEditor;
+    private FileSystemWatcher? _configurationWatcher;
+    private DateTime _lastConfigurationWatcherEventUtc = DateTime.MinValue;
+    private bool _suppressConfigurationWatcher;
 
     public ArkAsaSettingsViewModel(ServerProfile? profile = null)
     {
@@ -336,6 +343,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
             if (RevealSensitiveRawValues)
             {
                 RawGameUserSettings = value;
+                TryApplyRawEditorToPendingState(showError: false);
             }
         }
     }
@@ -347,6 +355,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
             if (RevealSensitiveRawValues)
             {
                 RawGameIni = value;
+                TryApplyRawEditorToPendingState(showError: false);
             }
         }
     }
@@ -402,8 +411,9 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
             Message = "No ARK ASA profile exists yet. Defaults are ready for a new server instance.";
         }
 
-        _loadedRawGameUserSettings = File.Exists(_profile.Paths.GameUserSettingsPath) ? await File.ReadAllTextAsync(_profile.Paths.GameUserSettingsPath) : string.Empty;
-        _loadedRawGameIni = File.Exists(_profile.Paths.GameIniPath) ? await File.ReadAllTextAsync(_profile.Paths.GameIniPath) : string.Empty;
+        _configurationState = await _configurationStateService.LoadAsync(profile?.Id ?? "new-ark-server", _profile);
+        _loadedRawGameUserSettings = _configurationState.GameUserSettingsRawText;
+        _loadedRawGameIni = _configurationState.GameIniRawText;
         RawGameUserSettings = _loadedRawGameUserSettings;
         RawGameIni = _loadedRawGameIni;
         LoadRegistry();
@@ -413,28 +423,48 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         Mods.LoadFrom(_profile, appSettings);
         NotifyAll();
         RefreshChangeState();
+        ConfigureConfigurationWatcher();
     }
 
     private async Task SaveAsync()
     {
-        Mods.ApplyTo(_profile);
-
-        foreach (var setting in Settings)
+        _suppressConfigurationWatcher = true;
+        try
         {
-            if (setting.FileLocation == ArkSettingFileLocation.GameUserSettingsIni)
-            {
-                _profile.GameUserSettings.ServerSettings[setting.Key] = setting.Value;
-            }
-            else if (setting.FileLocation == ArkSettingFileLocation.GameIni && setting.DataType != ArkSettingDataType.RepeatedLine)
-            {
-                _profile.GameIni.ShooterGameModeSettings[setting.Key] = setting.Value;
-            }
-        }
+            Mods.ApplyTo(_profile);
 
-        await SaveRawEditorTextIfChangedAsync();
-        var result = await new ArkAsaConfigService().SaveAsync(_profile);
-        Message = $"Saved configs: {Path.GetFileName(result.GameUserSettingsPath)}, {Path.GetFileName(result.GameIniPath)}";
-        await LoadAsync();
+            if (!TryApplyRawEditorToPendingState(showError: true))
+            {
+                return;
+            }
+
+            foreach (var setting in Settings)
+            {
+                if (setting.FileLocation == ArkSettingFileLocation.GameUserSettingsIni)
+                {
+                    _profile.GameUserSettings.ServerSettings[setting.Key] = setting.SerializedValue;
+                }
+                else if (setting.FileLocation == ArkSettingFileLocation.GameIni && setting.DataType == ArkSettingDataType.RepeatedLine)
+                {
+                    _profile.GameIni.RepeatedSettings[setting.Key] = setting.Value
+                        .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
+                        .ToList();
+                }
+                else if (setting.FileLocation == ArkSettingFileLocation.GameIni)
+                {
+                    _profile.GameIni.ShooterGameModeSettings[setting.Key] = setting.SerializedValue;
+                }
+            }
+
+            await SaveRawEditorTextIfChangedAsync();
+            var result = await new ArkAsaConfigService().SaveAsync(_profile);
+            Message = $"Saved configs: {Path.GetFileName(result.GameUserSettingsPath)}, {Path.GetFileName(result.GameIniPath)}";
+            await LoadAsync();
+        }
+        finally
+        {
+            _ = Task.Delay(1000).ContinueWith(_ => _suppressConfigurationWatcher = false);
+        }
     }
 
     private async Task SaveRawEditorTextIfChangedAsync()
@@ -481,12 +511,48 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         ApplyFilters();
     }
 
+    private void RefreshSettingValuesFromProfile()
+    {
+        foreach (var setting in Settings)
+        {
+            setting.SetPendingValue(ReadCurrentValue(setting.Definition));
+        }
+
+        RefreshChangeState();
+    }
+
     private string ReadCurrentValue(ArkSettingDefinition definition)
     {
         return definition.FileLocation switch
         {
             ArkSettingFileLocation.GameUserSettingsIni when _profile.GameUserSettings.ServerSettings.TryGetValue(definition.Key, out var value) => value,
             ArkSettingFileLocation.GameIni when _profile.GameIni.ShooterGameModeSettings.TryGetValue(definition.Key, out var value) => value,
+            ArkSettingFileLocation.GameIni when definition.DataType == ArkSettingDataType.RepeatedLine && _profile.GameIni.RepeatedSettings.TryGetValue(definition.Key, out var repeated) => string.Join(Environment.NewLine, repeated),
+            ArkSettingFileLocation.LaunchArguments => ReadLaunchValue(definition),
+            _ => definition.DefaultValue
+        };
+    }
+
+    private string ReadLaunchValue(ArkSettingDefinition definition)
+    {
+        return definition.Key.ToLowerInvariant() switch
+        {
+            "mapname" => _profile.Basic.MapName,
+            "sessionname" => _profile.Basic.ServerName,
+            "serverpassword" => _profile.Basic.ServerPassword,
+            "serveradminpassword" => _profile.Basic.AdminPassword,
+            "port" => _profile.Network.GamePort.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "queryport" => _profile.Network.QueryPort.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "rconport" => _profile.Network.RCONPort.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "rconenabled" => _profile.Network.RCONEnabled ? "True" : "False",
+            "maxplayers" => _profile.Basic.MaxPlayers.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "altsavedirectoryname" => _profile.Basic.AltSaveDirectoryName,
+            "clusterid" => _profile.Cluster.ClusterID,
+            "clusterdiroverride" => _profile.Cluster.ClusterDirectoryOverride,
+            "notransferfromfiltering" => _profile.Cluster.NoTransferFromFiltering ? "True" : "False",
+            "mods" => string.Join(',', _profile.Mods.EnabledMods.Where(mod => mod.Enabled).Select(mod => mod.Id)),
+            "nobattleye" => _profile.Basic.EnableBattlEye ? "False" : "True",
+            "log" => _profile.Basic.EnableConsoleLog ? "True" : "False",
             _ => definition.DefaultValue
         };
     }
@@ -573,9 +639,107 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
 
     private void OnSettingChanged()
     {
+        ApplyVisualSettingsToPendingProfile();
+        RegenerateRawPreviewFromPendingProfile();
         ValidateCurrentProfile();
         RefreshChangeState();
         NotifyCommandChanged();
+    }
+
+    private void ApplyVisualSettingsToPendingProfile()
+    {
+        foreach (var setting in Settings)
+        {
+            if (setting.FileLocation == ArkSettingFileLocation.GameUserSettingsIni)
+            {
+                _profile.GameUserSettings.ServerSettings[setting.Key] = setting.SerializedValue;
+                ApplySpecialVisualValue(setting.Key, setting.SerializedValue);
+            }
+            else if (setting.FileLocation == ArkSettingFileLocation.GameIni)
+            {
+                if (setting.DataType == ArkSettingDataType.RepeatedLine)
+                {
+                    _profile.GameIni.RepeatedSettings[setting.Key] = setting.Value
+                        .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
+                        .ToList();
+                }
+                else
+                {
+                    _profile.GameIni.ShooterGameModeSettings[setting.Key] = setting.SerializedValue;
+                }
+            }
+        }
+    }
+
+    private void ApplySpecialVisualValue(string key, string value)
+    {
+        if (key.Equals("SessionName", StringComparison.OrdinalIgnoreCase)) _profile.Basic.ServerName = value;
+        else if (key.Equals("ServerPassword", StringComparison.OrdinalIgnoreCase)) _profile.Basic.ServerPassword = value;
+        else if (key.Equals("ServerAdminPassword", StringComparison.OrdinalIgnoreCase)) _profile.Basic.AdminPassword = value;
+        else if (key.Equals("SpectatorPassword", StringComparison.OrdinalIgnoreCase)) _profile.Basic.SpectatorPassword = value;
+        else if (key.Equals("MaxPlayers", StringComparison.OrdinalIgnoreCase) && int.TryParse(value, out var maxPlayers)) _profile.Basic.MaxPlayers = maxPlayers;
+        else if (key.Equals("RCONEnabled", StringComparison.OrdinalIgnoreCase) && bool.TryParse(value, out var rconEnabled)) _profile.Network.RCONEnabled = rconEnabled;
+        else if (key.Equals("RCONPort", StringComparison.OrdinalIgnoreCase) && int.TryParse(value, out var rconPort)) _profile.Network.RCONPort = rconPort;
+    }
+
+    private void RegenerateRawPreviewFromPendingProfile()
+    {
+        if (_syncingRawEditor)
+        {
+            return;
+        }
+
+        try
+        {
+            var gus = IniDocument.Parse(RawGameUserSettings);
+            foreach (var setting in _profile.GameUserSettings.ServerSettings)
+            {
+                gus.SetValue(ArkAsaSettingRegistry.ServerSettingsSection, setting.Key, setting.Value);
+            }
+
+            var game = IniDocument.Parse(RawGameIni);
+            foreach (var setting in _profile.GameIni.ShooterGameModeSettings)
+            {
+                game.SetValue(ArkAsaSettingRegistry.GameModeSection, setting.Key, setting.Value);
+            }
+
+            foreach (var repeated in _profile.GameIni.RepeatedSettings)
+            {
+                game.SetRepeatedValues(ArkAsaSettingRegistry.GameModeSection, repeated.Key, repeated.Value);
+            }
+
+            _syncingRawEditor = true;
+            RawGameUserSettings = gus.Render();
+            RawGameIni = game.Render();
+        }
+        finally
+        {
+            _syncingRawEditor = false;
+        }
+    }
+
+    private bool TryApplyRawEditorToPendingState(bool showError)
+    {
+        if (_syncingRawEditor)
+        {
+            return true;
+        }
+
+        try
+        {
+            _configurationState = _configurationStateService.LoadFromRawText(_configurationState?.ServerId ?? "new-ark-server", _profile, RawGameUserSettings, RawGameIni);
+            RefreshSettingValuesFromProfile();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            if (showError)
+            {
+                Message = $"Raw INI syntax could not be synchronized: {ex.Message}";
+            }
+
+            return false;
+        }
     }
 
     private void SelectCategory(object? parameter)
@@ -601,6 +765,62 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
                 item.ErrorCount = Settings.Count(setting => setting.Category.Equals(item.Name, StringComparison.OrdinalIgnoreCase) && setting.HasError);
             }
         }
+    }
+
+    private void ConfigureConfigurationWatcher()
+    {
+        _configurationWatcher?.Dispose();
+        _configurationWatcher = null;
+
+        if (string.IsNullOrWhiteSpace(_profile.Paths.ConfigPath) || !Directory.Exists(_profile.Paths.ConfigPath))
+        {
+            return;
+        }
+
+        _configurationWatcher = new FileSystemWatcher(_profile.Paths.ConfigPath, "*.ini")
+        {
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
+            IncludeSubdirectories = false,
+            EnableRaisingEvents = true
+        };
+        _configurationWatcher.Changed += OnConfigurationFileChanged;
+        _configurationWatcher.Created += OnConfigurationFileChanged;
+        _configurationWatcher.Renamed += OnConfigurationFileChanged;
+    }
+
+    private void OnConfigurationFileChanged(object sender, FileSystemEventArgs e)
+    {
+        if (_suppressConfigurationWatcher ||
+            (!e.FullPath.Equals(_profile.Paths.GameUserSettingsPath, StringComparison.OrdinalIgnoreCase) &&
+             !e.FullPath.Equals(_profile.Paths.GameIniPath, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        if ((now - _lastConfigurationWatcherEventUtc).TotalMilliseconds < 750)
+        {
+            return;
+        }
+
+        _lastConfigurationWatcherEventUtc = now;
+        _ = HandleExternalConfigurationChangeAsync(e.FullPath);
+    }
+
+    private async Task HandleExternalConfigurationChangeAsync(string path)
+    {
+        await Task.Delay(750);
+        await Application.Current.Dispatcher.InvokeAsync(async () =>
+        {
+            if (HasUnsavedChanges)
+            {
+                Message = $"{Path.GetFileName(path)} changed on disk while you have unsaved changes. Use Reload from Disk or review pending changes before saving.";
+                return;
+            }
+
+            await LoadAsync();
+            Message = $"{Path.GetFileName(path)} was changed outside Game Server Manager and has been reloaded.";
+        });
     }
 
     private void RefreshChangeState()
@@ -832,6 +1052,7 @@ public sealed class ArkSettingDefinitionViewModel : BaseViewModel
 
     public ArkSettingDefinitionViewModel(ArkSettingDefinition definition, string value, Action changed)
     {
+        Definition = definition;
         Key = definition.Key;
         DisplayName = definition.DisplayName;
         Description = definition.Description;
@@ -856,6 +1077,7 @@ public sealed class ArkSettingDefinitionViewModel : BaseViewModel
         Validate();
     }
 
+    public ArkSettingDefinition Definition { get; }
     public string Key { get; }
     public string DisplayName { get; }
     public string Description { get; }
@@ -911,6 +1133,7 @@ public sealed class ArkSettingDefinitionViewModel : BaseViewModel
             : string.Empty;
     public string MaskedDisplayValue => IsPassword && !string.IsNullOrEmpty(Value) ? "********" : Value;
     public string MaskedSavedValue => IsPassword && !string.IsNullOrEmpty(SavedValue) ? "********" : SavedValue;
+    public string SerializedValue => SerializeValue(Value);
 
     public string Value
     {
@@ -924,6 +1147,7 @@ public sealed class ArkSettingDefinitionViewModel : BaseViewModel
                 OnPropertyChanged(nameof(IsModified));
                 OnPropertyChanged(nameof(IsCustomized));
                 OnPropertyChanged(nameof(MaskedDisplayValue));
+                OnPropertyChanged(nameof(SerializedValue));
                 _changed();
             }
         }
@@ -952,6 +1176,19 @@ public sealed class ArkSettingDefinitionViewModel : BaseViewModel
         Value = SavedValue;
     }
 
+    public void SetPendingValue(string value)
+    {
+        if (SetProperty(ref _value, value, nameof(Value)))
+        {
+            Validate();
+            OnPropertyChanged(nameof(BooleanValue));
+            OnPropertyChanged(nameof(IsModified));
+            OnPropertyChanged(nameof(IsCustomized));
+            OnPropertyChanged(nameof(MaskedDisplayValue));
+            OnPropertyChanged(nameof(SerializedValue));
+        }
+    }
+
     public void Validate()
     {
         ErrorText = string.Empty;
@@ -967,10 +1204,31 @@ public sealed class ArkSettingDefinitionViewModel : BaseViewModel
             return;
         }
 
-        if (DataType == ArkSettingDataType.Decimal && (!decimal.TryParse(Value, out var number) || HasRangeError(number)))
+        if (DataType == ArkSettingDataType.Decimal && (!decimal.TryParse(Value, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var number) || HasRangeError(number)))
         {
             ErrorText = RangeMessage("number");
         }
+    }
+
+    private string SerializeValue(string value)
+    {
+        if (DataType == ArkSettingDataType.Boolean)
+        {
+            return value.Equals("True", StringComparison.OrdinalIgnoreCase) || value == "1" ? "True" : "False";
+        }
+
+        if (DataType == ArkSettingDataType.Integer && int.TryParse(value, out var integer))
+        {
+            return integer.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        if (DataType == ArkSettingDataType.Decimal &&
+            decimal.TryParse(value, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var number))
+        {
+            return number.ToString("G29", System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return value;
     }
 
     private bool HasRangeError(decimal value) =>

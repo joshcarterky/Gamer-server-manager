@@ -12,6 +12,26 @@ This project follows semantic versioning.
 
 ### Fixed
 
+## [3.1.1] - 2026-06-17
+
+### Added
+
+- Added a shared ARK ASA configuration state loader that hydrates visual settings from the real server INI files.
+- Added synchronization regression tests for disk-to-visual loading, raw editor edits, correct-file saves, duplicate scalar cleanup, and repeated entry preservation.
+- Added selected-server INI file watching for external GameUserSettings.ini and Game.ini changes.
+
+### Changed
+
+- ARK visual settings, raw INI text, pending changes, and save verification now use the same parsed configuration documents.
+- Raw editor edits now parse back into pending visual settings before save.
+- Visual edits now regenerate pending raw INI previews.
+
+### Fixed
+
+- Fixed ARK ASA visual settings drifting from GameUserSettings.ini and Game.ini values on disk.
+- Fixed saves reporting success before rereading and verifying written ARK configuration values.
+- Fixed culture-sensitive numeric serialization for ARK setting values.
+
 ## [3.1.0] - 2026-06-17
 
 ### Added

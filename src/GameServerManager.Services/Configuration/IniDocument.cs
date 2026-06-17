@@ -55,6 +55,11 @@ public sealed class IniDocument
             .ToArray();
     }
 
+    public IReadOnlyList<IniEntrySnapshot> Entries => _lines
+        .Where(line => line.Kind == IniLineKind.KeyValue)
+        .Select((line, index) => new IniEntrySnapshot(line.Section, line.Key, line.Value, line.OriginalText, index + 1))
+        .ToArray();
+
     public string? GetValue(string section, string key)
     {
         return GetValues(section, key).LastOrDefault();
@@ -176,7 +181,15 @@ public sealed class IniDocument
         }
 
         var tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
-        await File.WriteAllTextAsync(tempPath, Render());
+        await using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        await using (var writer = new StreamWriter(stream, Encoding.UTF8))
+        {
+            await writer.WriteAsync(Render());
+            await writer.FlushAsync();
+            stream.Flush(flushToDisk: true);
+        }
+
+        Parse(await File.ReadAllTextAsync(tempPath));
         if (File.Exists(path))
         {
             File.Replace(tempPath, path, null);
@@ -228,6 +241,8 @@ public sealed class IniDocument
         return key.Length > 0;
     }
 }
+
+public sealed record IniEntrySnapshot(string Section, string Key, string Value, string OriginalText, int LineNumber);
 
 internal enum IniLineKind
 {

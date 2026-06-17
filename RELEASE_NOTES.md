@@ -1,5 +1,28 @@
 # Release Notes
 
+## v3.1.1
+
+## Added
+
+- **ARK ASA configuration synchronization state** - visual settings now load from the real `GameUserSettings.ini` and `Game.ini` files for the selected server before controls are created.
+- **Raw editor synchronization** - raw INI edits now parse back into the same pending state used by the visual editor.
+- **External file detection** - changes to the selected server's INI files are detected and either reloaded or reported when unsaved changes exist.
+- **Regression coverage** - tests now verify disk-to-visual sync, visual-to-disk saves, raw editor sync, duplicate scalar cleanup, and repeated entry preservation.
+
+## Changed
+
+- Visual setting changes now update pending raw INI previews.
+- Save now rereads and verifies written ARK keys before reporting success.
+- Decimal and integer ARK values are serialized using invariant culture.
+
+## Fixed
+
+- Fixed visual ARK settings showing values that did not match the real INI files.
+- Fixed raw INI text and visual controls acting like separate unsynchronized states.
+- Fixed GameUserSettings.ini settings and Game.ini settings being vulnerable to stale profile/default values during load.
+
+---
+
 ## v3.1.0
 
 ## Added

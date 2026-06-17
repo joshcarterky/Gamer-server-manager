@@ -241,6 +241,194 @@ public sealed class ArkAsaLaunchBuilder
 
 public sealed record ArkLaunchPreview(string ExecutablePath, string WorkingDirectory, string Arguments, string CommandLine);
 
+public sealed record ArkServerConfigurationState(
+    string ServerId,
+    string ServerInstallPath,
+    string GameUserSettingsPath,
+    string GameIniPath,
+    string LaunchArguments,
+    IniDocument RawGameUserSettingsDocument,
+    IniDocument RawGameIniDocument,
+    IReadOnlyDictionary<string, string> SavedValues,
+    IReadOnlyDictionary<string, string> PendingValues,
+    DateTimeOffset LastLoadedAt,
+    string GameUserSettingsRawText,
+    string GameIniRawText)
+{
+    public bool HasUnsavedChanges =>
+        SavedValues.Count != PendingValues.Count ||
+        PendingValues.Any(entry => !SavedValues.TryGetValue(entry.Key, out var saved) || !string.Equals(saved, entry.Value, StringComparison.Ordinal));
+}
+
+public sealed class ArkAsaConfigurationStateService
+{
+    private readonly ArkAsaProfileMapper _mapper = new();
+
+    public async Task<ArkServerConfigurationState> LoadAsync(string serverId, ArkSurvivalAscendedServerProfile profile)
+    {
+        _mapper.HydratePaths(profile);
+        var gusText = File.Exists(profile.Paths.GameUserSettingsPath)
+            ? await File.ReadAllTextAsync(profile.Paths.GameUserSettingsPath)
+            : string.Empty;
+        var gameText = File.Exists(profile.Paths.GameIniPath)
+            ? await File.ReadAllTextAsync(profile.Paths.GameIniPath)
+            : string.Empty;
+
+        var gus = IniDocument.Parse(gusText);
+        var game = IniDocument.Parse(gameText);
+        ApplyDocumentsToProfile(profile, gus, game);
+
+        profile.RawSettings.GameUserSettingsRawText = gusText;
+        profile.RawSettings.GameIniRawText = gameText;
+        var values = SnapshotValues(profile);
+
+        return new ArkServerConfigurationState(
+            serverId,
+            profile.Basic.InstallPath,
+            profile.Paths.GameUserSettingsPath,
+            profile.Paths.GameIniPath,
+            profile.Launch.CustomLaunchArguments,
+            gus,
+            game,
+            values,
+            new Dictionary<string, string>(values, StringComparer.OrdinalIgnoreCase),
+            DateTimeOffset.UtcNow,
+            gusText,
+            gameText);
+    }
+
+    public ArkServerConfigurationState LoadFromRawText(string serverId, ArkSurvivalAscendedServerProfile profile, string gameUserSettingsText, string gameIniText)
+    {
+        _mapper.HydratePaths(profile);
+        var gus = IniDocument.Parse(gameUserSettingsText);
+        var game = IniDocument.Parse(gameIniText);
+        ApplyDocumentsToProfile(profile, gus, game);
+        profile.RawSettings.GameUserSettingsRawText = gameUserSettingsText;
+        profile.RawSettings.GameIniRawText = gameIniText;
+        var values = SnapshotValues(profile);
+
+        return new ArkServerConfigurationState(
+            serverId,
+            profile.Basic.InstallPath,
+            profile.Paths.GameUserSettingsPath,
+            profile.Paths.GameIniPath,
+            profile.Launch.CustomLaunchArguments,
+            gus,
+            game,
+            values,
+            new Dictionary<string, string>(values, StringComparer.OrdinalIgnoreCase),
+            DateTimeOffset.UtcNow,
+            gameUserSettingsText,
+            gameIniText);
+    }
+
+    public static IReadOnlyDictionary<string, string> SnapshotValues(ArkSurvivalAscendedServerProfile profile)
+    {
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var setting in ArkAsaSettingRegistry.All)
+        {
+            var identity = SettingIdentity(setting);
+            var value = setting.FileLocation switch
+            {
+                ArkSettingFileLocation.GameUserSettingsIni when profile.GameUserSettings.ServerSettings.TryGetValue(setting.Key, out var saved) => saved,
+                ArkSettingFileLocation.GameIni when setting.DataType == ArkSettingDataType.RepeatedLine && profile.GameIni.RepeatedSettings.TryGetValue(setting.Key, out var repeated) => string.Join(Environment.NewLine, repeated),
+                ArkSettingFileLocation.GameIni when profile.GameIni.ShooterGameModeSettings.TryGetValue(setting.Key, out var saved) => saved,
+                ArkSettingFileLocation.LaunchArguments => GetLaunchValue(profile, setting),
+                _ => setting.DefaultValue
+            };
+
+            values[identity] = value;
+        }
+
+        return values;
+    }
+
+    private static void ApplyDocumentsToProfile(ArkSurvivalAscendedServerProfile profile, IniDocument gus, IniDocument game)
+    {
+        profile.GameUserSettings.ServerSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        profile.GameIni.ShooterGameModeSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        profile.GameIni.RepeatedSettings = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var setting in ArkAsaSettingRegistry.All)
+        {
+            if (setting.FileLocation == ArkSettingFileLocation.GameUserSettingsIni)
+            {
+                var value = gus.GetValue(setting.IniSection, setting.Key);
+                if (value is not null)
+                {
+                    profile.GameUserSettings.ServerSettings[setting.Key] = value;
+                    ApplyKnownScalarToProfile(profile, setting.Key, value);
+                }
+            }
+            else if (setting.FileLocation == ArkSettingFileLocation.GameIni)
+            {
+                var values = game.GetValues(setting.IniSection, setting.Key);
+                if (setting.DataType == ArkSettingDataType.RepeatedLine)
+                {
+                    if (values.Count > 0)
+                    {
+                        profile.GameIni.RepeatedSettings[setting.Key] = values.ToList();
+                    }
+                }
+                else
+                {
+                    var value = values.LastOrDefault();
+                    if (value is not null)
+                    {
+                        profile.GameIni.ShooterGameModeSettings[setting.Key] = value;
+                    }
+                }
+            }
+        }
+    }
+
+    private static void ApplyKnownScalarToProfile(ArkSurvivalAscendedServerProfile profile, string key, string value)
+    {
+        if (key.Equals("SessionName", StringComparison.OrdinalIgnoreCase)) profile.Basic.ServerName = value;
+        else if (key.Equals("ServerPassword", StringComparison.OrdinalIgnoreCase)) profile.Basic.ServerPassword = value;
+        else if (key.Equals("ServerAdminPassword", StringComparison.OrdinalIgnoreCase)) profile.Basic.AdminPassword = value;
+        else if (key.Equals("SpectatorPassword", StringComparison.OrdinalIgnoreCase)) profile.Basic.SpectatorPassword = value;
+        else if (key.Equals("MaxPlayers", StringComparison.OrdinalIgnoreCase) && int.TryParse(value, out var maxPlayers)) profile.Basic.MaxPlayers = maxPlayers;
+        else if (key.Equals("RCONEnabled", StringComparison.OrdinalIgnoreCase) && bool.TryParse(value, out var rconEnabled)) profile.Network.RCONEnabled = rconEnabled;
+        else if (key.Equals("RCONPort", StringComparison.OrdinalIgnoreCase) && int.TryParse(value, out var rconPort)) profile.Network.RCONPort = rconPort;
+        else if (key.Equals("ActiveMods", StringComparison.OrdinalIgnoreCase))
+        {
+            profile.Mods.ModIDs = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        }
+        else if (key.Equals("ActiveMapMod", StringComparison.OrdinalIgnoreCase))
+        {
+            profile.Mods.ActiveMapModId = value;
+        }
+    }
+
+    private static string GetLaunchValue(ArkSurvivalAscendedServerProfile profile, ArkSettingDefinition setting)
+    {
+        return setting.Key.ToLowerInvariant() switch
+        {
+            "mapname" => profile.Basic.MapName,
+            "sessionname" => profile.Basic.ServerName,
+            "serverpassword" => profile.Basic.ServerPassword,
+            "serveradminpassword" => profile.Basic.AdminPassword,
+            "port" => profile.Network.GamePort.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "queryport" => profile.Network.QueryPort.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "rconport" => profile.Network.RCONPort.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "rconenabled" => profile.Network.RCONEnabled ? "True" : "False",
+            "maxplayers" => profile.Basic.MaxPlayers.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "altsavedirectoryname" => profile.Basic.AltSaveDirectoryName,
+            "clusterid" => profile.Cluster.ClusterID,
+            "clusterdiroverride" => profile.Cluster.ClusterDirectoryOverride,
+            "notransferfromfiltering" => profile.Cluster.NoTransferFromFiltering ? "True" : "False",
+            "mods" => string.Join(',', profile.Mods.EnabledMods.Where(mod => mod.Enabled).Select(mod => mod.Id)),
+            "nobattleye" => profile.Basic.EnableBattlEye ? "False" : "True",
+            "log" => profile.Basic.EnableConsoleLog ? "True" : "False",
+            _ => profile.Launch.CustomLaunchArguments
+        };
+    }
+
+    private static string SettingIdentity(ArkSettingDefinition setting) =>
+        $"{setting.FileLocation}|{setting.IniSection}|{setting.Key}";
+}
+
 public sealed class ArkAsaConfigService
 {
     public async Task<ArkConfigSaveResult> SaveAsync(ArkSurvivalAscendedServerProfile profile, bool createBackup = true)
@@ -288,8 +476,32 @@ public sealed class ArkAsaConfigService
 
         await gus.SaveAtomicAsync(profile.Paths.GameUserSettingsPath, createBackup);
         await game.SaveAtomicAsync(profile.Paths.GameIniPath, createBackup);
+        await VerifySavedAsync(profile);
         profile.Advanced.MarkServerNeedsRestart = true;
         return new ArkConfigSaveResult(profile.Paths.GameUserSettingsPath, profile.Paths.GameIniPath);
+    }
+
+    private static async Task VerifySavedAsync(ArkSurvivalAscendedServerProfile profile)
+    {
+        var gus = await IniDocument.LoadAsync(profile.Paths.GameUserSettingsPath);
+        foreach (var setting in profile.GameUserSettings.ServerSettings)
+        {
+            var saved = gus.GetValue(ArkAsaSettingRegistry.ServerSettingsSection, setting.Key);
+            if (!string.Equals(saved, setting.Value, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"Save verification failed for GameUserSettings.ini key {setting.Key}.");
+            }
+        }
+
+        var game = await IniDocument.LoadAsync(profile.Paths.GameIniPath);
+        foreach (var setting in profile.GameIni.ShooterGameModeSettings)
+        {
+            var saved = game.GetValue(ArkAsaSettingRegistry.GameModeSection, setting.Key);
+            if (!string.Equals(saved, setting.Value, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"Save verification failed for Game.ini key {setting.Key}.");
+            }
+        }
     }
 }
 
