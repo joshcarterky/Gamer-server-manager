@@ -57,6 +57,7 @@ public class SettingsViewModel : BaseViewModel
     private string _updateStatus = "No update check has run yet.";
     private string _updateHistoryText = "No update history recorded yet.";
     private string? _downloadedUpdatePath;
+    private string _latestUpdateTechnicalDetails = string.Empty;
     private string _diagnosticsStatus = string.Empty;
     private UpdateState _updateState = UpdateState.Idle;
 
@@ -95,11 +96,11 @@ public class SettingsViewModel : BaseViewModel
         ImportCommand = new RelayCommand(async _ => await ImportAsync());
         TestCurseForgeCommand = new RelayCommand(async _ => await TestCurseForgeAsync());
         CheckForUpdatesCommand = new RelayCommand(async _ => await CheckForUpdatesAsync(manual: true),
-            () => _updateState != UpdateState.Checking && _updateState != UpdateState.Downloading && _updateState != UpdateState.Installing);
+            () => _updateState is not (UpdateState.Checking or UpdateState.PreparingDownload or UpdateState.Downloading or UpdateState.Verifying or UpdateState.Installing or UpdateState.WaitingForApplicationExit or UpdateState.Restarting));
         DownloadUpdateCommand = new RelayCommand(async _ => await DownloadUpdateAsync(),
             () => _updateState == UpdateState.UpdateAvailable);
         InstallUpdateCommand = new RelayCommand(async _ => await InstallUpdateAsync(),
-            () => _updateState == UpdateState.Downloaded);
+            () => _updateState == UpdateState.ReadyToInstall);
         CancelDownloadCommand = new RelayCommand(_ => CancelDownload(),
             () => _updateState == UpdateState.Downloading);
         DownloadAndInstallCommand = new RelayCommand(async _ => await DownloadAndInstallAsync(),
@@ -400,18 +401,22 @@ public class SettingsViewModel : BaseViewModel
         ? "Repository owner and name are required."
         : "Repository settings are ready to validate.";
     public bool CanUseUpdateFrequency => Settings.AutomaticallyCheckForUpdates;
-    public bool CanUseBackgroundDownload => Settings.AutomaticallyDownloadUpdates;
+    public bool CanUseAutomaticDownload => Settings.AutomaticallyCheckForUpdates;
+    public bool CanUseBackgroundDownload => Settings.AutomaticallyCheckForUpdates && Settings.AutomaticallyDownloadUpdates;
     public bool ShowPrereleaseWarning => Settings.IncludeBetaUpdates || string.Equals(Settings.UpdateChannel, "Beta", StringComparison.OrdinalIgnoreCase);
     public bool HasUpdateAvailable => _lastUpdateResult.IsUpdateAvailable;
+    public string LatestUpdateTechnicalDetails => _latestUpdateTechnicalDetails;
+    public bool HasUpdateTechnicalDetails => !string.IsNullOrWhiteSpace(_latestUpdateTechnicalDetails);
+    public string DownloadedUpdateFileName => string.IsNullOrWhiteSpace(_downloadedUpdatePath) ? "No downloaded package" : Path.GetFileName(_downloadedUpdatePath);
     public bool IsCheckingForUpdates => _updateState == UpdateState.Checking;
     public bool ShowDownloadButton => _updateState == UpdateState.UpdateAvailable;
-    public bool ShowInstallButton => _updateState == UpdateState.Downloaded;
+    public bool ShowInstallButton => _updateState == UpdateState.ReadyToInstall;
     public bool ShowCancelButton => _updateState == UpdateState.Downloading;
     public bool ShowNoInstallerMessage => _updateState == UpdateState.NoInstallerFound;
-    public bool ShowReadyToInstall => _updateState == UpdateState.Downloaded;
-    public bool ShowDownloadProgress => _updateState is UpdateState.Checking or UpdateState.Downloading;
-    public bool ShowCheckForUpdatesAction => _updateState is UpdateState.Idle or UpdateState.UpToDate or UpdateState.Failed or UpdateState.Cancelled;
-    public bool ShowReleaseAction => _updateState is UpdateState.UpToDate or UpdateState.UpdateAvailable or UpdateState.NoInstallerFound or UpdateState.Downloaded;
+    public bool ShowReadyToInstall => _updateState == UpdateState.ReadyToInstall;
+    public bool ShowDownloadProgress => _updateState is UpdateState.Checking or UpdateState.PreparingDownload or UpdateState.Downloading or UpdateState.Verifying;
+    public bool ShowCheckForUpdatesAction => _updateState is UpdateState.Idle or UpdateState.UpToDate or UpdateState.Failed or UpdateState.Cancelled or UpdateState.VerificationFailed;
+    public bool ShowReleaseAction => _updateState is UpdateState.UpToDate or UpdateState.UpdateAvailable or UpdateState.NoInstallerFound or UpdateState.Downloaded or UpdateState.ReadyToInstall or UpdateState.Failed or UpdateState.VerificationFailed;
     public string UpdateStateText => _updateState switch
     {
         UpdateState.Idle => Settings.LastUpdateCheckUtc is null ? "Not checked yet" : "Idle",
@@ -419,9 +424,17 @@ public class SettingsViewModel : BaseViewModel
         UpdateState.UpToDate => "Up to Date",
         UpdateState.UpdateAvailable => "Update Available",
         UpdateState.NoInstallerFound => "No Compatible Asset",
+        UpdateState.PreparingDownload => "Preparing Download",
         UpdateState.Downloading => "Downloading",
-        UpdateState.Downloaded => "Ready to Install",
+        UpdateState.DownloadPaused => "Download Paused",
+        UpdateState.Downloaded => "Downloaded",
+        UpdateState.Verifying => "Verifying",
+        UpdateState.VerificationFailed => "Verification Failed",
+        UpdateState.ReadyToInstall => "Ready to Install",
         UpdateState.Installing => "Installing",
+        UpdateState.WaitingForApplicationExit => "Waiting for Application Exit",
+        UpdateState.Restarting => "Restarting",
+        UpdateState.Completed => "Completed",
         UpdateState.InstallStarted => "Restart Required",
         UpdateState.Failed => "Failed",
         UpdateState.Cancelled => "Cancelled",
@@ -462,6 +475,7 @@ public class SettingsViewModel : BaseViewModel
         OnPropertyChanged(nameof(ShowCheckForUpdatesAction));
         OnPropertyChanged(nameof(ShowReleaseAction));
         OnPropertyChanged(nameof(UpdateStateText));
+        OnPropertyChanged(nameof(DownloadedUpdateFileName));
         CheckForUpdatesCommand.NotifyCanExecuteChanged();
         DownloadUpdateCommand.NotifyCanExecuteChanged();
         InstallUpdateCommand.NotifyCanExecuteChanged();
@@ -477,7 +491,7 @@ public class SettingsViewModel : BaseViewModel
     private async Task DownloadAndInstallAsync()
     {
         await DownloadUpdateAsync();
-        if (_updateState == UpdateState.Downloaded)
+        if (_updateState == UpdateState.ReadyToInstall)
         {
             await InstallUpdateAsync();
         }
@@ -778,50 +792,67 @@ public class SettingsViewModel : BaseViewModel
         _downloadCancellation?.Cancel();
         _downloadCancellation = new CancellationTokenSource();
         SetUpdateState(UpdateState.Downloading);
+        SetUpdateState(UpdateState.PreparingDownload);
         DownloadProgress = 0;
-        DownloadDetail = string.Empty;
-        UpdateStatus = "Downloading update...";
-        StatusMessage = "Downloading update...";
+        DownloadDetail = "Preparing update download...";
+        UpdateStatus = $"Preparing to download Game Server Manager {_lastUpdateResult.LatestVersion}.";
+        StatusMessage = UpdateStatus;
+        _latestUpdateTechnicalDetails = string.Empty;
+        OnPropertyChanged(nameof(LatestUpdateTechnicalDetails));
+        OnPropertyChanged(nameof(HasUpdateTechnicalDetails));
 
         try
         {
+            SetUpdateState(UpdateState.Downloading);
             var result = await _downloadService.DownloadBestWindowsAssetAsync(_lastUpdateResult, progress =>
             {
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     DownloadProgress = progress.Percent;
-                    DownloadDetail = $"{FormatBytes(progress.DownloadedBytes)} / {(progress.TotalBytes is long total ? FormatBytes(total) : "?")} at {FormatBytes((long)progress.BytesPerSecond)}/s";
+                    var remaining = progress.EstimatedRemaining is TimeSpan eta ? $" - approximately {FormatDuration(eta)} remaining" : string.Empty;
+                    DownloadDetail = $"{progress.FileName ?? "Update package"}: {FormatBytes(progress.DownloadedBytes)} / {(progress.TotalBytes is long total ? FormatBytes(total) : "?")} ({progress.Percent}%) at {FormatBytes((long)progress.BytesPerSecond)}/s{remaining}";
+                    StatusMessage = $"Downloading {_lastUpdateResult.LatestVersion} - {progress.Percent}%";
                 });
             }, _downloadCancellation.Token);
 
             _downloadedUpdatePath = result.FilePath;
             if (result.Success)
             {
-                SetUpdateState(UpdateState.Downloaded);
-                UpdateStatus = "Update downloaded and ready to install.";
+                SetUpdateState(UpdateState.Verifying);
+                UpdateStatus = "Verifying update package...";
+                StatusMessage = UpdateStatus;
+                await Task.Yield();
+                SetUpdateState(UpdateState.ReadyToInstall);
+                UpdateStatus = $"Version {_lastUpdateResult.LatestVersion} is downloaded and verified.";
                 StatusMessage = UpdateStatus;
                 await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Download", "Success", result.Message);
             }
             else
             {
-                SetUpdateState(UpdateState.UpdateAvailable);
-                UpdateStatus = result.Message;
-                StatusMessage = "Download failed.";
+                SetUpdateState(result.Message.Contains("checksum", StringComparison.OrdinalIgnoreCase) ? UpdateState.VerificationFailed : UpdateState.Failed);
+                _latestUpdateTechnicalDetails = result.TechnicalDetails ?? result.Message;
+                OnPropertyChanged(nameof(LatestUpdateTechnicalDetails));
+                OnPropertyChanged(nameof(HasUpdateTechnicalDetails));
+                UpdateStatus = $"Update download failed. {result.Message}";
+                StatusMessage = "Update download failed.";
                 await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Download", "Failed", result.TechnicalDetails ?? result.Message);
             }
         }
         catch (OperationCanceledException)
         {
-            SetUpdateState(UpdateState.UpdateAvailable);
+            SetUpdateState(UpdateState.Cancelled);
             UpdateStatus = UpdateErrorMessages.For("UserCanceled");
             StatusMessage = "Download canceled.";
             await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Download", "Canceled", "User canceled the download.");
         }
         catch (Exception ex)
         {
-            SetUpdateState(UpdateState.UpdateAvailable);
+            SetUpdateState(UpdateState.Failed);
             UpdateStatus = UpdateErrorMessages.For("DownloadFailed", ex.Message);
             StatusMessage = "Download failed.";
+            _latestUpdateTechnicalDetails = ex.ToString();
+            OnPropertyChanged(nameof(LatestUpdateTechnicalDetails));
+            OnPropertyChanged(nameof(HasUpdateTechnicalDetails));
             await _updateLogger.LogAsync("Download threw an unhandled exception.", ex.ToString());
         }
     }
@@ -832,6 +863,13 @@ public class SettingsViewModel : BaseViewModel
         if (!readiness.CanInstall && string.IsNullOrWhiteSpace(_downloadedUpdatePath))
         {
             UpdateStatus = readiness.Message;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_downloadedUpdatePath) || !File.Exists(_downloadedUpdatePath))
+        {
+            SetUpdateState(UpdateState.Failed);
+            UpdateStatus = "The verified installer could not be found. Download the update again.";
             return;
         }
 
@@ -855,8 +893,8 @@ public class SettingsViewModel : BaseViewModel
                     || _downloadedUpdatePath.EndsWith(".msi", StringComparison.OrdinalIgnoreCase))
                 {
                     var answer = MessageBox.Show(
-                        $"The app needs to close to install the update.\n\nUpdate: {_lastUpdateResult.LatestVersion ?? "Unknown"}\nInstaller: {Path.GetFileName(_downloadedUpdatePath)}\n\nInstall now?",
-                        "Install Update",
+                        $"Game Server Manager will close while version {_lastUpdateResult.LatestVersion ?? "Unknown"} is installed.\n\nCurrent version: {AppVersion.Current}\nNew version: {_lastUpdateResult.LatestVersion ?? "Unknown"}\nInstaller: {Path.GetFileName(_downloadedUpdatePath)}\nSize: {FormatBytes(new FileInfo(_downloadedUpdatePath).Length)}\nChannel: {UpdateChannelText}\n\nWindows may request administrator permission if the app is installed in a protected folder.\n\nInstall and restart now?",
+                        "Install and Restart",
                         MessageBoxButton.YesNo,
                         MessageBoxImage.Question);
 
@@ -869,10 +907,10 @@ public class SettingsViewModel : BaseViewModel
                     }
 
                     await _updateLogger.LogAsync("Launching installer.", _downloadedUpdatePath);
-                    Process.Start(new ProcessStartInfo(_downloadedUpdatePath) { UseShellExecute = true });
+                    var process = Process.Start(new ProcessStartInfo(_downloadedUpdatePath) { UseShellExecute = true });
                     await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Install", "Started", _downloadedUpdatePath);
-                    SetUpdateState(UpdateState.InstallStarted);
-                    UpdateStatus = "Installer launched. The app will close now.";
+                    SetUpdateState(UpdateState.WaitingForApplicationExit);
+                    UpdateStatus = $"Installer launched{(process is null ? string.Empty : $" (PID {process.Id})")}. Game Server Manager will close now.";
                     await Task.Delay(600);
                     Application.Current.Shutdown();
                     return;
@@ -883,8 +921,11 @@ public class SettingsViewModel : BaseViewModel
         }
         catch (Exception ex)
         {
-            SetUpdateState(UpdateState.Downloaded);
+            SetUpdateState(UpdateState.ReadyToInstall);
             UpdateStatus = UpdateErrorMessages.For("InstallFailed", ex.Message);
+            _latestUpdateTechnicalDetails = ex.ToString();
+            OnPropertyChanged(nameof(LatestUpdateTechnicalDetails));
+            OnPropertyChanged(nameof(HasUpdateTechnicalDetails));
             await _updateLogger.LogAsync("Install failed.", ex.ToString());
             await AddUpdateHistoryAsync(_lastUpdateResult.LatestVersion ?? "Unknown", "Install", "Failed", ex.ToString());
         }
@@ -1108,8 +1149,12 @@ public class SettingsViewModel : BaseViewModel
         OnPropertyChanged(nameof(ReleaseUrl));
         OnPropertyChanged(nameof(DownloadSizeText));
         OnPropertyChanged(nameof(InstallerPackageType));
+        OnPropertyChanged(nameof(DownloadedUpdateFileName));
+        OnPropertyChanged(nameof(LatestUpdateTechnicalDetails));
+        OnPropertyChanged(nameof(HasUpdateTechnicalDetails));
         OnPropertyChanged(nameof(RepositoryValidationText));
         OnPropertyChanged(nameof(CanUseUpdateFrequency));
+        OnPropertyChanged(nameof(CanUseAutomaticDownload));
         OnPropertyChanged(nameof(CanUseBackgroundDownload));
         OnPropertyChanged(nameof(ShowPrereleaseWarning));
         OnPropertyChanged(nameof(HasUpdateAvailable));
@@ -1148,6 +1193,16 @@ public class SettingsViewModel : BaseViewModel
         if (bytes >= 1024 * 1024) return $"{bytes / 1024d / 1024d:0.0} MB";
         if (bytes >= 1024) return $"{bytes / 1024d:0.0} KB";
         return $"{bytes} bytes";
+    }
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalMinutes >= 1)
+        {
+            return $"{duration.TotalMinutes:0} minute{(duration.TotalMinutes >= 1.5 ? "s" : string.Empty)}";
+        }
+
+        return $"{Math.Max(1, duration.TotalSeconds):0} seconds";
     }
 
     private void ApplyRuntimeSettings()

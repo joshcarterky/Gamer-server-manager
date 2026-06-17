@@ -1,5 +1,28 @@
 # Release Notes
 
+## v3.0.9
+
+## Added
+
+- **Professional updater download workflow** - downloads are now staged per target version using `.partial` files, then verified before the installer becomes available.
+- **Update verification metadata** - successful downloads write update metadata with package name, channel, size, hash, install status, and restart executable information.
+- **Updater technical details** - failed downloads and verification failures now surface technical details in Settings > Updates instead of only showing a generic error.
+- **ARK ASA settings redesign pass** - the ARK settings page now has grouped navigation, a server context header, overview cards, section-based settings, boolean editors, validation indicators, and a sticky save bar.
+
+## Changed
+
+- GitHub release asset selection now rejects source archives, checksum files, symbols, debug packages, non-Windows packages, and incompatible architectures.
+- Release asset names now include `x64` for clearer update matching.
+- Settings > Updates now transitions through Preparing Download, Downloading, Verifying, and Ready to Install states.
+- The install action is now labeled **Install and Restart** and confirms the current version, target version, installer name, size, and channel before launching.
+
+## Fixed
+
+- Fixed the updater path that could leave users at "The update download failed" without a usable install step or technical cause.
+- Fixed automatic-update dependency behavior so automatic downloads require automatic checks, and background downloads require automatic downloads.
+
+---
+
 ## v3.0.8
 
 ## Changed

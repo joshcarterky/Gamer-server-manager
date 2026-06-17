@@ -66,10 +66,7 @@ public sealed class GitHubReleaseService
                 .Select(asset => new UpdateAsset(asset.Name, asset.BrowserDownloadUrl, asset.Size, asset.ContentType))
                 .ToArray();
 
-            var preferredAsset = assets.FirstOrDefault(asset => asset.Name.Contains("Setup", StringComparison.OrdinalIgnoreCase))
-                ?? assets.FirstOrDefault(asset => asset.Name.Contains("Installer", StringComparison.OrdinalIgnoreCase))
-                ?? assets.FirstOrDefault(asset => asset.Name.Contains("Portable", StringComparison.OrdinalIgnoreCase))
-                ?? assets.FirstOrDefault(asset => asset.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
+            var preferredAsset = GitHubAssetDownloadService.PickBestWindowsAsset(assets, "Installer");
             await LogAsync(
                 "Version comparison result.",
                 $"UpdateAvailable=True; Current={current}; Latest={latestVersion}; PreferredAsset={preferredAsset?.Name ?? "none"}; AssetCount={assets.Length}",

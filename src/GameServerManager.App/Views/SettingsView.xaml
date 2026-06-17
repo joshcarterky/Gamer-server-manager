@@ -506,7 +506,7 @@
                                                 Visibility="{Binding ShowDownloadButton, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                         <Button Content="Cancel" Command="{Binding CancelDownloadCommand}" Style="{StaticResource ToolbarButton}" Margin="0,0,8,0"
                                                 Visibility="{Binding ShowCancelButton, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                        <Button Content="Install Update" Command="{Binding InstallUpdateCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"
+                                        <Button Content="Install and Restart" Command="{Binding InstallUpdateCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"
                                                 Visibility="{Binding ShowInstallButton, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                         <Button Content="View Release" Command="{Binding ViewReleaseCommand}" Style="{StaticResource ToolbarButton}"
                                                 Visibility="{Binding ShowReleaseAction, Converter={StaticResource BooleanToVisibilityConverter}}"/>
@@ -515,11 +515,21 @@
                                     </StackPanel>
                                     <Border Background="#0F2A1A" BorderBrush="#2ECC71" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,12,0,0"
                                             Visibility="{Binding ShowReadyToInstall, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                        <TextBlock Text="Update package downloaded and ready. Installation will ask before closing or restarting the application." Foreground="#62F19F" FontWeight="SemiBold" FontSize="12" TextWrapping="Wrap"/>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding DownloadedUpdateFileName, StringFormat=Verified package: {0}}" Foreground="#62F19F" FontWeight="SemiBold" FontSize="12" TextWrapping="Wrap"/>
+                                            <TextBlock Text="Installation will ask before closing or restarting the application." Foreground="#62F19F" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                        </StackPanel>
                                     </Border>
                                     <Border Background="#2A0F0F" BorderBrush="#CC3333" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,12,0,0"
                                             Visibility="{Binding ShowNoInstallerMessage, Converter={StaticResource BooleanToVisibilityConverter}}">
                                         <TextBlock Text="Update found, but no compatible Windows installer or portable package is attached. Open the GitHub release to download manually." Foreground="#F16262" FontSize="12" TextWrapping="Wrap"/>
+                                    </Border>
+                                    <Border Background="#211419" BorderBrush="#8A3948" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,12,0,0"
+                                            Visibility="{Binding HasUpdateTechnicalDetails, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <StackPanel>
+                                            <TextBlock Text="Technical details" Foreground="#FFADB6" FontWeight="SemiBold" FontSize="12"/>
+                                            <TextBlock Text="{Binding LatestUpdateTechnicalDetails}" Foreground="#FFCBD0" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                        </StackPanel>
                                     </Border>
                                 </StackPanel>
                             </Border>
@@ -530,7 +540,7 @@
                                     <UniformGrid Columns="2">
                                         <CheckBox Content="Automatically check for updates" IsChecked="{Binding Settings.AutomaticallyCheckForUpdates}" Style="{StaticResource Check}"/>
                                         <CheckBox Content="Ask before downloading" IsChecked="{Binding Settings.AskBeforeDownloadingUpdates}" Style="{StaticResource Check}"/>
-                                        <CheckBox Content="Automatically download updates" IsChecked="{Binding Settings.AutomaticallyDownloadUpdates}" Style="{StaticResource Check}"/>
+                                        <CheckBox Content="Automatically download updates" IsChecked="{Binding Settings.AutomaticallyDownloadUpdates}" IsEnabled="{Binding CanUseAutomaticDownload}" Style="{StaticResource Check}"/>
                                         <CheckBox Content="Ask before installing" IsChecked="{Binding Settings.AskBeforeInstallingUpdates}" Style="{StaticResource Check}"/>
                                         <CheckBox Content="Include prerelease versions" IsChecked="{Binding Settings.IncludeBetaUpdates}" Style="{StaticResource Check}"/>
                                         <CheckBox Content="Notify when an update is available" IsChecked="{Binding Settings.NotifyWhenUpdateAvailable}" Style="{StaticResource Check}"/>

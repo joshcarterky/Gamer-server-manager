@@ -70,6 +70,7 @@ TestMemoryPolicy();
 await TestArkSurvivalAscendedAsync();
 TestUpdaterVersionComparison();
 TestSettingsUpdateSeparation();
+TestArkSettingsRedesignContracts();
 TestDiagnosticsMaskSecrets();
 TestPortableModeDetection();
 
@@ -402,6 +403,24 @@ static void TestUpdaterVersionComparison()
     };
     var best = GitHubAssetDownloadService.PickBestWindowsAsset(assets);
     Assert(best?.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) == true, "Windows setup asset should be preferred over portable ZIP.");
+
+    var noisyAssets = new[]
+    {
+        new UpdateAsset("Source code.zip", "https://example.invalid/source.zip", 10, "application/zip"),
+        new UpdateAsset("NexusServerManager-Checksums-v3.0.8.txt", "https://example.invalid/checksums.txt", 10, "text/plain"),
+        new UpdateAsset("NexusServerManager-Setup-v3.0.8-x64.exe", "https://example.invalid/setup.exe", 20, "application/octet-stream"),
+        new UpdateAsset("NexusServerManager-Portable-v3.0.8-x64.zip", "https://example.invalid/portable.zip", 30, "application/zip"),
+        new UpdateAsset("NexusServerManager-Setup-v3.0.8-arm64.exe", "https://example.invalid/arm64.exe", 20, "application/octet-stream")
+    };
+    var setup = GitHubAssetDownloadService.PickBestWindowsAsset(noisyAssets, "Installer");
+    Assert(setup?.Name == "NexusServerManager-Setup-v3.0.8-x64.exe", "Installer mode should select the compatible setup EXE.");
+    var portable = GitHubAssetDownloadService.PickBestWindowsAsset(noisyAssets, "Portable");
+    Assert(portable?.Name == "NexusServerManager-Portable-v3.0.8-x64.zip", "Portable mode should select the compatible portable ZIP.");
+    Assert(!GitHubAssetDownloadService.IsCompatibleWindowsAsset(noisyAssets[0]), "Source ZIP should be rejected.");
+    Assert(!GitHubAssetDownloadService.IsCompatibleWindowsAsset(noisyAssets[1]), "Checksums file should be rejected as an installer.");
+
+    var msiOnly = new[] { new UpdateAsset("NexusServerManager-v3.0.8-x64.msi", "https://example.invalid/setup.msi", 20, "application/octet-stream") };
+    Assert(GitHubAssetDownloadService.PickBestWindowsAsset(msiOnly, "Installer")?.Name.EndsWith(".msi", StringComparison.OrdinalIgnoreCase) == true, "MSI installer should be selected when no EXE is available.");
 }
 
 static void TestSettingsUpdateSeparation()
@@ -434,6 +453,25 @@ static void TestSettingsUpdateSeparation()
     Assert(xaml.Contains("Client Updates", StringComparison.Ordinal), "Updates page should expose the Client Updates center.");
     Assert(xaml.Contains("Advanced Update Source", StringComparison.Ordinal), "Updates page should own repository source configuration.");
     Assert(xaml.Contains("CheckForUpdatesCommand", StringComparison.Ordinal), "Updates page should retain the update check command.");
+}
+
+static void TestArkSettingsRedesignContracts()
+{
+    var boolSetting = ArkAsaSettingRegistry.All.FirstOrDefault(setting =>
+        setting.Key.Equals("ServerPVE", StringComparison.OrdinalIgnoreCase));
+    Assert(boolSetting is not null, "ARK settings registry should include ServerPVE.");
+    Assert(boolSetting!.DataType == ArkSettingDataType.Boolean, "ServerPVE should be modeled as a boolean.");
+
+    var validation = new ArkValidationResult();
+    new ArkAsaValidator().ValidateSettingValue(boolSetting, "Maybe", validation);
+    Assert(validation.Errors.Any(error => error.Contains("True or False", StringComparison.Ordinal)), "Boolean validation should reject non-boolean values.");
+
+    var xamlPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "GameServerManager.App", "Views", "ArkAsaSettingsView.xaml"));
+    var xaml = File.ReadAllText(xamlPath);
+    Assert(xaml.Contains("NavigationGroups", StringComparison.Ordinal), "ARK settings UI should use grouped navigation.");
+    Assert(xaml.Contains("Server Overview", StringComparison.Ordinal), "ARK settings UI should include a designed overview page.");
+    Assert(xaml.Contains("BooleanValue", StringComparison.Ordinal), "ARK settings UI should bind boolean settings to a checkbox editor.");
+    Assert(!xaml.Contains("ItemsSource=\"{Binding Tabs}\" SelectedItem=\"{Binding SelectedTab}\"", StringComparison.Ordinal), "ARK settings navigation should not use the old flat tab list.");
 }
 
 static void TestDiagnosticsMaskSecrets()

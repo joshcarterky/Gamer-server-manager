@@ -12,6 +12,28 @@ This project follows semantic versioning.
 
 ### Fixed
 
+## [3.0.9] - 2026-06-17
+
+### Added
+
+- Added staged updater downloads under version-specific update folders with `.partial` files.
+- Added package verification for file existence, size, package header type, HTTPS-only URLs, compatible asset type, and SHA-256 checksums when a checksum asset is published.
+- Added pending update metadata JSON for verified downloads.
+- Added technical failure details to Settings > Updates.
+- Added ARK ASA settings page grouped navigation, server overview, section cards, boolean editors, and field validation indicators.
+
+### Changed
+
+- GitHub release selection now uses a shared compatible Windows asset matcher for check and download paths.
+- Release packaging now names public Windows assets with an explicit `x64` architecture suffix.
+- Update install action now confirms and launches the external installer as a separate process before closing the app.
+- Automatic download settings now respect their dependencies.
+
+### Fixed
+
+- Fixed the updater flow that could stop after a failed download without a verified installer or usable install state.
+- Rejected source archives, checksum files, debug/symbol packages, non-Windows assets, and incompatible architecture assets during updater asset selection.
+
 ## [3.0.8] - 2026-06-17
 
 ### Added
