@@ -69,8 +69,7 @@ public class ArkSurvivalAscendedProvider : GameServerProviderBase
             $"QueryPort={queryPort}",
             $"RCONPort={rconPort}",
             $"RCONEnabled={(rconEnabled ? "True" : "False")}",
-            $"ServerAdminPassword=\"{Escape(adminPassword)}\"",
-            $"MaxPlayers={(profile.MaxPlayers <= 0 ? 70 : profile.MaxPlayers)}"
+            $"ServerAdminPassword=\"{Escape(adminPassword)}\""
         };
 
         if (!string.IsNullOrWhiteSpace(profile.Password))
@@ -105,6 +104,10 @@ public class ArkSurvivalAscendedProvider : GameServerProviderBase
         {
             modIds = string.Join(',', profile.Mods.Where(mod => mod.IsEnabled).Select(mod => mod.Id));
         }
+
+        // ASA uses -WinLiveMaxPlayers, not the legacy URL-style MaxPlayers= parameter
+        var maxPlayers = profile.MaxPlayers <= 0 ? 70 : profile.MaxPlayers;
+        flags.Add($"-WinLiveMaxPlayers={maxPlayers}");
 
         if (!string.IsNullOrWhiteSpace(modIds))
         {

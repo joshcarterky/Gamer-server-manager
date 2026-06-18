@@ -14,7 +14,8 @@ namespace GameServerManager.App.ViewModels;
 
 public sealed class ArkAsaSettingsViewModel : BaseViewModel
 {
-    private readonly ServersJsonService _serversJsonService = new(new AppDataPaths());
+    private readonly AppDataPaths _paths = new();
+    private readonly ServersJsonService _serversJsonService;
     private readonly ArkAsaProfileMapper _mapper = new();
     private readonly ArkAsaLaunchBuilder _launchBuilder = new();
     private readonly ArkAsaConfigurationStateService _configurationStateService = new();
@@ -43,10 +44,11 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
 
     public ArkAsaSettingsViewModel(ServerProfile? profile = null)
     {
+        _serversJsonService = new ServersJsonService(_paths);
         _requestedProfileId = profile?.Id;
         Tabs = new ObservableCollection<string>
         {
-            "Overview", "Install / Update", "Startup", "Maps", "Network / Ports", "Admin / Passwords",
+            "Overview", "Startup", "Maps", "Network / Ports", "Admin / Passwords",
             "Rates", "Player Settings", "Dino Settings", "Breeding / Imprinting", "Harvesting / Resources",
             "PvE / PvP Rules", "Structures", "Engrams / Levels", "Mods", "Cluster", "Backups",
             "RCON / Console", "Logs", "Advanced", "Raw INI Editor"
@@ -54,7 +56,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         NavigationGroups = new ObservableCollection<ArkNavigationGroupViewModel>
         {
             new("OVERVIEW", new[] { "Overview", "Health and Validation" }),
-            new("SERVER", new[] { "Install / Update", "Startup", "Maps", "Network / Ports", "Admin / Passwords" }),
+            new("SERVER", new[] { "Startup", "Maps", "Network / Ports", "Admin / Passwords" }),
             new("GAMEPLAY", new[] { "Rates", "Player Settings", "Dino Settings", "Breeding / Imprinting", "Harvesting / Resources", "PvE / PvP Rules", "Structures", "Engrams / Levels" }),
             new("MANAGEMENT", new[] { "Mods", "Cluster", "Backups", "RCON / Console", "Logs" }),
             new("ADVANCED", new[] { "Advanced", "Raw INI Editor" })
@@ -78,6 +80,8 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         OpenServerFolderCommand = new RelayCommand(_ => OpenFolder(InstallPath));
         OpenConfigFolderCommand = new RelayCommand(_ => OpenFolder(_profile.Paths.ConfigPath));
         OpenLogsFolderCommand = new RelayCommand(_ => OpenFolder(_profile.Paths.LogsPath));
+        OpenGameUserSettingsCommand = new RelayCommand(_ => OpenFileInDefaultEditor(_profile.Paths.GameUserSettingsPath));
+        OpenGameIniCommand = new RelayCommand(_ => OpenFileInDefaultEditor(_profile.Paths.GameIniPath));
         CreateBackupCommand = new RelayCommand(async _ => await CreateBackupAsync());
         ExportConfigurationCommand = new RelayCommand(_ => ExportConfiguration());
         ManageModsCommand = new RelayCommand(_ => SelectedTab = "Mods");
@@ -112,6 +116,8 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
     public RelayCommand OpenServerFolderCommand { get; }
     public RelayCommand OpenConfigFolderCommand { get; }
     public RelayCommand OpenLogsFolderCommand { get; }
+    public RelayCommand OpenGameUserSettingsCommand { get; }
+    public RelayCommand OpenGameIniCommand { get; }
     public RelayCommand CreateBackupCommand { get; }
     public RelayCommand ExportConfigurationCommand { get; }
     public RelayCommand ManageModsCommand { get; }
@@ -186,7 +192,6 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
                 OnPropertyChanged(nameof(IsModsTab));
                 OnPropertyChanged(nameof(IsOverviewTab));
                 OnPropertyChanged(nameof(IsHealthValidationTab));
-                OnPropertyChanged(nameof(IsInstallUpdateTab));
                 OnPropertyChanged(nameof(IsStartupTab));
                 OnPropertyChanged(nameof(IsRawEditorTab));
                 OnPropertyChanged(nameof(IsSettingsTab));
@@ -202,12 +207,11 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
 
     public bool IsOverviewTab => SelectedTab.Equals("Overview", StringComparison.OrdinalIgnoreCase);
     public bool IsHealthValidationTab => SelectedTab.Equals("Health and Validation", StringComparison.OrdinalIgnoreCase);
-    public bool IsInstallUpdateTab => SelectedTab.Equals("Install / Update", StringComparison.OrdinalIgnoreCase);
     public bool IsStartupTab => SelectedTab.Equals("Startup", StringComparison.OrdinalIgnoreCase);
     public bool IsClusterTab => SelectedTab.Equals("Cluster", StringComparison.OrdinalIgnoreCase);
     public bool IsModsTab => SelectedTab.Equals("Mods", StringComparison.OrdinalIgnoreCase);
     public bool IsRawEditorTab => SelectedTab.Equals("Raw INI Editor", StringComparison.OrdinalIgnoreCase);
-    public bool IsSettingsTab => !IsOverviewTab && !IsHealthValidationTab && !IsInstallUpdateTab && !IsStartupTab && !IsClusterTab && !IsModsTab && !IsRawEditorTab;
+    public bool IsSettingsTab => !IsOverviewTab && !IsHealthValidationTab && !IsStartupTab && !IsClusterTab && !IsModsTab && !IsRawEditorTab;
     public string ModeDescription => ShowAdvanced
         ? "Full configuration access for experienced ARK administrators."
         : "Recommended settings for most ARK servers.";
@@ -215,7 +219,6 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
     {
         "Overview" => "Quick status, configuration health, and the most common ARK server settings.",
         "Health and Validation" => "Validation results, restart requirements, and structured current-vs-pending changes.",
-        "Install / Update" => "SteamCMD installation, server build status, update checks, and validation actions.",
         "Startup" => "Startup behavior, launch options, crash recovery, and generated command validation.",
         "Network / Ports" => "Game, query, and RCON port configuration with local conflict guidance.",
         "Admin / Passwords" => "Sensitive access settings. Password values are masked in previews and diagnostics.",
@@ -477,6 +480,96 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         }
     }
 
+    // === Overview diagnostics and status ===
+    public string ProfileDisplayName => _loadedServerProfileId != null ? "Server Profile" : "New Server";
+    public string IniSyncStatusText
+    {
+        get
+        {
+            if (_configurationState == null) return "Not loaded";
+            return HasUnsavedChanges ? "Modified" : "In sync";
+        }
+    }
+    public string IniSyncStatusColor => IniSyncStatusText switch
+    {
+        "In sync" => "#22C55E",
+        "Modified" => "#F59E0B",
+        _ => "#8FA7BC"
+    };
+    public bool IniSyncIsGood => IniSyncStatusText == "In sync";
+    public string LaunchArgsStatusText => HasUnsavedChanges ? "Pending" : "Healthy";
+    public string LaunchArgsStatusColor => HasUnsavedChanges ? "#F59E0B" : "#22C55E";
+    public bool LaunchArgsIsGood => LaunchArgsStatusText == "Healthy";
+    public string LastValidatedText
+    {
+        get
+        {
+            if (_configurationState == null) return "Not validated";
+            var local = _configurationState.LastLoadedAt.LocalDateTime;
+            return local.Date == DateTime.Now.Date
+                ? $"Today at {local:h:mm tt}"
+                : local.ToString("MMM d 'at' h:mm tt");
+        }
+    }
+    public string PathExistsText => Directory.Exists(InstallPath) ? "Exists" : "Missing";
+    public string PathExistsColor => Directory.Exists(InstallPath) ? "#22C55E" : "#EF4444";
+    public bool PathExists => Directory.Exists(InstallPath);
+    public string PathWritableText
+    {
+        get
+        {
+            if (!Directory.Exists(InstallPath)) return "N/A";
+            return CanWriteToDirectory(InstallPath) ? "Writable" : "Read Only";
+        }
+    }
+    public string PathWritableColor => PathWritableText switch
+    {
+        "Writable" => "#22C55E",
+        "N/A" => "#8FA7BC",
+        _ => "#F59E0B"
+    };
+    public string DiskSpaceText
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(InstallPath)) return "Unknown";
+            try
+            {
+                var root = Path.GetPathRoot(InstallPath);
+                if (string.IsNullOrEmpty(root)) return "Unknown";
+                var drive = new System.IO.DriveInfo(root);
+                var gb = drive.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0);
+                return gb >= 10 ? $"Sufficient ({gb:F1} GB)" : $"Low ({gb:F1} GB)";
+            }
+            catch { return "Unknown"; }
+        }
+    }
+    public string DiskSpaceColor
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(InstallPath)) return "#8FA7BC";
+            try
+            {
+                var root = Path.GetPathRoot(InstallPath);
+                if (string.IsNullOrEmpty(root)) return "#8FA7BC";
+                var drive = new System.IO.DriveInfo(root);
+                var gb = drive.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0);
+                return gb >= 10 ? "#22C55E" : "#F59E0B";
+            }
+            catch { return "#8FA7BC"; }
+        }
+    }
+    public string ExecutableStatusColor => File.Exists(_profile.Paths.ExecutablePath) ? "#22C55E" : "#F59E0B";
+    public bool ExecutableExists => File.Exists(_profile.Paths.ExecutablePath);
+    public string ModsStatusText => _profile.Mods.EnabledMods.Any(m => m.Enabled) ? "Mods enabled" : "No mods";
+    public string ModsStatusColor => _profile.Mods.EnabledMods.Any(m => m.Enabled) ? "#3B82F6" : "#8FA7BC";
+
+    public bool HasMigrationWarnings => _configurationState?.MigrationResult?.HasWarnings == true;
+    public string MigrationWarningText => _configurationState?.MigrationResult?.HasWarnings == true
+        ? string.Join("\n", _configurationState.MigrationResult.Warnings)
+        : string.Empty;
+
     public string RawGameUserSettings
     {
         get => _rawGameUserSettings;
@@ -525,7 +618,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         {
             _loadedServerProfileId = null;
             _profile = new ArkSurvivalAscendedServerProfile();
-            _profile.Basic.InstallPath = Path.Combine(Environment.CurrentDirectory, "Servers", "ARK_Survival_Ascended");
+            _profile.Basic.InstallPath = Path.Combine(_paths.ServersDirectory, "ark-survival-ascended");
             _mapper.HydratePaths(_profile);
             Message = "No ARK ASA profile exists yet. Defaults are ready for a new server instance.";
         }
@@ -795,6 +888,27 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         OnPropertyChanged(nameof(RconPort));
         OnPropertyChanged(nameof(SteamCmdArguments));
         OnPropertyChanged(nameof(MaskedCommandPreview));
+        OnPropertyChanged(nameof(ProfileDisplayName));
+        OnPropertyChanged(nameof(IniSyncStatusText));
+        OnPropertyChanged(nameof(IniSyncStatusColor));
+        OnPropertyChanged(nameof(IniSyncIsGood));
+        OnPropertyChanged(nameof(LaunchArgsStatusText));
+        OnPropertyChanged(nameof(LaunchArgsStatusColor));
+        OnPropertyChanged(nameof(LaunchArgsIsGood));
+        OnPropertyChanged(nameof(LastValidatedText));
+        OnPropertyChanged(nameof(PathExistsText));
+        OnPropertyChanged(nameof(PathExistsColor));
+        OnPropertyChanged(nameof(PathExists));
+        OnPropertyChanged(nameof(PathWritableText));
+        OnPropertyChanged(nameof(PathWritableColor));
+        OnPropertyChanged(nameof(DiskSpaceText));
+        OnPropertyChanged(nameof(DiskSpaceColor));
+        OnPropertyChanged(nameof(ExecutableStatusColor));
+        OnPropertyChanged(nameof(ExecutableExists));
+        OnPropertyChanged(nameof(ModsStatusText));
+        OnPropertyChanged(nameof(ModsStatusColor));
+        OnPropertyChanged(nameof(HasMigrationWarnings));
+        OnPropertyChanged(nameof(MigrationWarningText));
         NotifyCommandChanged();
     }
 
@@ -1017,6 +1131,12 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         OnPropertyChanged(nameof(RestartRequiredChangesCount));
         OnPropertyChanged(nameof(UnsavedChangesText));
         OnPropertyChanged(nameof(DiffPreview));
+        OnPropertyChanged(nameof(IniSyncStatusText));
+        OnPropertyChanged(nameof(IniSyncStatusColor));
+        OnPropertyChanged(nameof(IniSyncIsGood));
+        OnPropertyChanged(nameof(LaunchArgsStatusText));
+        OnPropertyChanged(nameof(LaunchArgsStatusColor));
+        OnPropertyChanged(nameof(LaunchArgsIsGood));
         RefreshNavigationState();
     }
 
@@ -1086,7 +1206,9 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         }
 
         ValidationErrorCount = validation.Errors.Count + clusterErrors + Settings.Count(setting => setting.HasError);
-        ValidationWarningCount = validation.Warnings.Count + clusterWarnings + Settings.Count(setting => !string.IsNullOrWhiteSpace(setting.WarningText));
+        // Only count a setting's WarningText if the user has actually customised that setting from its default.
+        // WarningText on an unchanged setting is a UI hint, not a configuration health issue.
+        ValidationWarningCount = validation.Warnings.Count + clusterWarnings + Settings.Count(setting => setting.HasWarning && setting.IsCustomized);
         Message = ValidationErrorCount == 0
             ? $"Configuration validated. {ValidationWarningCount} warning(s)."
             : $"Configuration has {ValidationErrorCount} error(s).";
@@ -1230,6 +1352,16 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
     }
 
+    private static void OpenFileInDefaultEditor(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return;
+        }
+
+        Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+    }
+
     private static bool CanWriteToDirectory(string path)
     {
         try
@@ -1339,6 +1471,33 @@ public sealed class ArkCategoryItemViewModel : BaseViewModel
 
     public bool HasModified => ModifiedCount > 0;
     public bool HasErrors => ErrorCount > 0;
+
+    public string Icon => Name switch
+    {
+        "Overview" => "",
+        "Health and Validation" => "",
+        "Startup" => "",
+        "Maps" => "",
+        "Network / Ports" => "",
+        "Admin / Passwords" => "",
+        "Rates" => "",
+        "Player Settings" => "",
+        "Dino Settings" => "",
+        "Breeding / Imprinting" => "",
+        "Harvesting / Resources" => "",
+        "PvE / PvP Rules" => "",
+        "Structures" => "",
+        "Engrams / Levels" => "",
+        "Mods" => "",
+        "Cluster" => "",
+        "Backups" => "",
+        "RCON / Console" => "",
+        "Logs" => "",
+        "Advanced" => "",
+        "Raw INI Editor" => "",
+        "Diagnostics" => "",
+        _ => ""
+    };
 }
 
 public sealed record ArkSettingsSectionViewModel(string Title, string Description, IReadOnlyList<ArkSettingDefinitionViewModel> Settings);

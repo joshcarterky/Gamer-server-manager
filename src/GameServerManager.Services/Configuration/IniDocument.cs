@@ -104,6 +104,14 @@ public sealed class IniDocument
         }
     }
 
+    public void RemoveKey(string section, string key)
+    {
+        _lines.RemoveAll(line =>
+            line.Kind == IniLineKind.KeyValue &&
+            line.Section.Equals(section, StringComparison.OrdinalIgnoreCase) &&
+            line.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
+    }
+
     public void AddRawLine(string section, string rawLine)
     {
         EnsureSection(section);

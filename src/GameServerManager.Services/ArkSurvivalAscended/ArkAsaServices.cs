@@ -179,8 +179,7 @@ public sealed class ArkAsaLaunchBuilder
             $"QueryPort={profile.Network.QueryPort}",
             $"RCONPort={profile.Network.RCONPort}",
             $"RCONEnabled={ToArkBool(profile.Network.RCONEnabled)}",
-            $"ServerAdminPassword=\"{Escape(revealPasswords ? profile.Basic.AdminPassword : Mask(profile.Basic.AdminPassword))}\"",
-            $"MaxPlayers={profile.Basic.MaxPlayers}"
+            $"ServerAdminPassword=\"{Escape(revealPasswords ? profile.Basic.AdminPassword : Mask(profile.Basic.AdminPassword))}\""
         };
 
         if (!string.IsNullOrWhiteSpace(profile.Basic.ServerPassword))
@@ -204,6 +203,10 @@ public sealed class ArkAsaLaunchBuilder
         }
 
         var flags = new List<string>();
+
+        // ASA uses -WinLiveMaxPlayers as a dash flag, not the legacy URL-style MaxPlayers= parameter
+        flags.Add($"-WinLiveMaxPlayers={profile.Basic.MaxPlayers}");
+
         if (profile.Cluster.ClusterEnabled)
         {
             if (!string.IsNullOrWhiteSpace(profile.Cluster.ClusterID))
@@ -283,7 +286,8 @@ public sealed record ArkServerConfigurationState(
     IReadOnlyDictionary<string, string> PendingValues,
     DateTimeOffset LastLoadedAt,
     string GameUserSettingsRawText,
-    string GameIniRawText)
+    string GameIniRawText,
+    ArkMigrationResult MigrationResult)
 {
     public bool HasUnsavedChanges =>
         SavedValues.Count != PendingValues.Count ||
@@ -306,6 +310,7 @@ public sealed class ArkAsaConfigurationStateService
 
         var gus = IniDocument.Parse(gusText);
         var game = IniDocument.Parse(gameText);
+        var migrationResult = ArkAsaConfigService.DetectObsoleteIniKeys(profile, gus);
         ApplyDocumentsToProfile(profile, gus, game);
 
         profile.RawSettings.GameUserSettingsRawText = gusText;
@@ -324,7 +329,8 @@ public sealed class ArkAsaConfigurationStateService
             new Dictionary<string, string>(values, StringComparer.OrdinalIgnoreCase),
             DateTimeOffset.UtcNow,
             gusText,
-            gameText);
+            gameText,
+            migrationResult);
     }
 
     public ArkServerConfigurationState LoadFromRawText(string serverId, ArkSurvivalAscendedServerProfile profile, string gameUserSettingsText, string gameIniText)
@@ -332,6 +338,7 @@ public sealed class ArkAsaConfigurationStateService
         _mapper.HydratePaths(profile);
         var gus = IniDocument.Parse(gameUserSettingsText);
         var game = IniDocument.Parse(gameIniText);
+        var migrationResult = ArkAsaConfigService.DetectObsoleteIniKeys(profile, gus);
         ApplyDocumentsToProfile(profile, gus, game);
         profile.RawSettings.GameUserSettingsRawText = gameUserSettingsText;
         profile.RawSettings.GameIniRawText = gameIniText;
@@ -349,7 +356,8 @@ public sealed class ArkAsaConfigurationStateService
             new Dictionary<string, string>(values, StringComparer.OrdinalIgnoreCase),
             DateTimeOffset.UtcNow,
             gameUserSettingsText,
-            gameIniText);
+            gameIniText,
+            migrationResult);
     }
 
     public static IReadOnlyDictionary<string, string> SnapshotValues(ArkSurvivalAscendedServerProfile profile)
@@ -461,6 +469,14 @@ public sealed class ArkAsaConfigurationStateService
 
 public sealed class ArkAsaConfigService
 {
+    // Keys that are launch-only for ASA and must never be written to GameUserSettings.ini.
+    private static readonly HashSet<string> LaunchOnlyKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "MaxPlayers",       // ASA uses -WinLiveMaxPlayers; the MaxPlayers INI key is the legacy ASE form
+        "ActiveMods",       // ASA uses -mods= launch argument; ActiveMods is the obsolete ASE form
+        "ActiveMapMod",     // handled via launch arg or mod manager, not INI
+    };
+
     public async Task<ArkConfigSaveResult> SaveAsync(ArkSurvivalAscendedServerProfile profile, bool createBackup = true)
     {
         var validator = new ArkAsaValidator();
@@ -470,9 +486,18 @@ public sealed class ArkAsaConfigService
             throw new InvalidOperationException(string.Join(Environment.NewLine, validation.Errors));
         }
 
+        EnsureConfigFilesExist(profile);
+
         var gus = await IniDocument.LoadAsync(profile.Paths.GameUserSettingsPath);
+
+        // Remove any obsolete MaxPlayers key that may have been written by an older version
+        gus.RemoveKey(ArkAsaSettingRegistry.ServerSettingsSection, "MaxPlayers");
+
         foreach (var setting in profile.GameUserSettings.ServerSettings)
         {
+            // Skip keys that belong exclusively in launch arguments for ASA
+            if (LaunchOnlyKeys.Contains(setting.Key))
+                continue;
             gus.SetValue(ArkAsaSettingRegistry.ServerSettingsSection, setting.Key, setting.Value);
         }
 
@@ -480,9 +505,9 @@ public sealed class ArkAsaConfigService
         gus.SetValue(ArkAsaSettingRegistry.ServerSettingsSection, "ServerPassword", profile.Basic.ServerPassword);
         gus.SetValue(ArkAsaSettingRegistry.ServerSettingsSection, "ServerAdminPassword", profile.Basic.AdminPassword);
         gus.SetValue(ArkAsaSettingRegistry.ServerSettingsSection, "SpectatorPassword", profile.Basic.SpectatorPassword);
-        gus.SetValue(ArkAsaSettingRegistry.ServerSettingsSection, "MaxPlayers", profile.Basic.MaxPlayers.ToString());
+        // MaxPlayers is intentionally NOT written here — ASA uses -WinLiveMaxPlayers in the launch command
         gus.SetValue(ArkAsaSettingRegistry.ServerSettingsSection, "RCONEnabled", profile.Network.RCONEnabled ? "True" : "False");
-        gus.SetValue(ArkAsaSettingRegistry.ServerSettingsSection, "RCONPort", profile.Network.RCONPort.ToString());
+        gus.SetValue(ArkAsaSettingRegistry.ServerSettingsSection, "RCONPort", profile.Network.RCONPort.ToString(System.Globalization.CultureInfo.InvariantCulture));
         foreach (var line in profile.GameUserSettings.CustomGameUserSettingsLines)
         {
             gus.AddRawLine(ArkAsaSettingRegistry.ServerSettingsSection, line);
@@ -511,16 +536,69 @@ public sealed class ArkAsaConfigService
         return new ArkConfigSaveResult(profile.Paths.GameUserSettingsPath, profile.Paths.GameIniPath);
     }
 
+    public static void EnsureConfigFilesExist(ArkSurvivalAscendedServerProfile profile)
+    {
+        if (string.IsNullOrWhiteSpace(profile.Paths.ConfigPath))
+            return;
+
+        Directory.CreateDirectory(profile.Paths.ConfigPath);
+
+        if (!File.Exists(profile.Paths.GameUserSettingsPath))
+        {
+            File.WriteAllText(profile.Paths.GameUserSettingsPath,
+                "[ServerSettings]\r\n; ARK Survival Ascended server configuration\r\n; Generated by Nexus Server Manager\r\n",
+                System.Text.Encoding.UTF8);
+        }
+
+        if (!File.Exists(profile.Paths.GameIniPath))
+        {
+            File.WriteAllText(profile.Paths.GameIniPath,
+                "[/script/shootergame.shootergamemode]\r\n; ARK Survival Ascended game configuration\r\n; Generated by Nexus Server Manager\r\n",
+                System.Text.Encoding.UTF8);
+        }
+    }
+
+    public static ArkMigrationResult DetectObsoleteIniKeys(ArkSurvivalAscendedServerProfile profile, IniDocument gus)
+    {
+        var warnings = new List<string>();
+
+        if (gus.GetValue(ArkAsaSettingRegistry.ServerSettingsSection, "MaxPlayers") is not null)
+        {
+            warnings.Add(
+                "Obsolete MaxPlayers key found in GameUserSettings.ini. " +
+                "ARK: Survival Ascended uses -WinLiveMaxPlayers in the launch command. " +
+                "This key will be removed from the INI on next save.");
+        }
+
+        if (gus.GetValue(ArkAsaSettingRegistry.ServerSettingsSection, "ActiveMods") is not null)
+        {
+            warnings.Add(
+                "Obsolete ActiveMods key found in GameUserSettings.ini. " +
+                "ARK: Survival Ascended uses -mods= in the launch command. " +
+                "Existing mod IDs have been migrated to the mod manager.");
+        }
+
+        return new ArkMigrationResult(warnings);
+    }
+
     private static async Task VerifySavedAsync(ArkSurvivalAscendedServerProfile profile)
     {
         var gus = await IniDocument.LoadAsync(profile.Paths.GameUserSettingsPath);
         foreach (var setting in profile.GameUserSettings.ServerSettings)
         {
+            if (LaunchOnlyKeys.Contains(setting.Key))
+                continue;
             var saved = gus.GetValue(ArkAsaSettingRegistry.ServerSettingsSection, setting.Key);
             if (!string.Equals(saved, setting.Value, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException($"Save verification failed for GameUserSettings.ini key {setting.Key}.");
             }
+        }
+
+        // Verify MaxPlayers was NOT written to INI
+        if (gus.GetValue(ArkAsaSettingRegistry.ServerSettingsSection, "MaxPlayers") is not null)
+        {
+            throw new InvalidOperationException("MaxPlayers was incorrectly written to GameUserSettings.ini. ASA uses -WinLiveMaxPlayers.");
         }
 
         var game = await IniDocument.LoadAsync(profile.Paths.GameIniPath);
@@ -536,6 +614,17 @@ public sealed class ArkAsaConfigService
 }
 
 public sealed record ArkConfigSaveResult(string GameUserSettingsPath, string GameIniPath);
+
+public sealed class ArkMigrationResult
+{
+    public IReadOnlyList<string> Warnings { get; }
+    public bool HasWarnings => Warnings.Count > 0;
+
+    public ArkMigrationResult(IReadOnlyList<string> warnings)
+    {
+        Warnings = warnings;
+    }
+}
 
 public sealed class ArkAsaValidator
 {

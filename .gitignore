@@ -3,6 +3,7 @@ bin/
 obj/
 dist/
 publish/
+TestBuild/
 artifacts/
 releases/**
 !releases/.gitkeep

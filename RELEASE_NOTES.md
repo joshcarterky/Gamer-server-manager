@@ -1,5 +1,71 @@
 # Release Notes
 
+## v3.4.0
+
+### Fixed
+- **ARK ASA — MaxPlayers** — ASA uses `-WinLiveMaxPlayers=<n>` as a launch flag. The legacy URL-style `MaxPlayers=` query parameter (from ARK: Survival Evolved) was being emitted by both `ArkSurvivalAscendedProvider.BuildStartCommand` and `ArkAsaLaunchBuilder.Build`. Both are now corrected.
+- **ARK ASA — ActiveMods** — `ArkAsaConfigService.SaveAsync` now skips `MaxPlayers` and `ActiveMods` when writing to `GameUserSettings.ini`. These are launch-only keys in ASA (the flag forms are `-WinLiveMaxPlayers=` and `-mods=`). Any old `MaxPlayers` entry already in the INI is actively removed on save.
+- **ARK ASA — migration detection** — `ArkAsaConfigurationStateService.LoadAsync` now detects obsolete `MaxPlayers` and `ActiveMods` keys in an existing `GameUserSettings.ini` and surfaces warnings in `ArkServerConfigurationState.MigrationResult`. The ViewModel exposes `HasMigrationWarnings` and `MigrationWarningText` properties for the UI to display these warnings.
+- **IniDocument** — added `RemoveKey(string section, string key)` to remove all occurrences of a key from a section, needed for pruning legacy keys on save.
+
+### Added
+- **ARK ASA Settings** — `OpenGameUserSettingsCommand` and `OpenGameIniCommand` on `ArkAsaSettingsViewModel` open the raw INI files in the system default editor.
+- **ARK ASA tests** — twelve new targeted tests covering `-WinLiveMaxPlayers=` correctness, `MaxPlayers` exclusion from INI, `ActiveMods` exclusion from launch args, full INI round-trip, comment preservation, multi-server path isolation, invariant-culture decimal formatting, password redaction in launch preview, mod ordering in `-mods=`, migration detection, and minimal INI file creation.
+
+---
+
+## v3.3.9
+
+### Fixed
+- **ARK ASA Settings — crash on open** — clicking the Settings button on a server card caused an immediate crash. The Overview page's diagnostic strip used `<Run Text="{Binding ...}">` which defaults to TwoWay binding mode in WPF. The bound properties (`PathExistsText`, `PathWritableText`, `DiskSpaceText`, `ExecutableStatus`) are read-only, so WPF threw `InvalidOperationException` during layout. Fixed by adding `Mode=OneWay` to all four bindings.
+
+---
+
+## v3.3.8
+
+### Changed
+- **ARK ASA Settings — full UI redesign** — replaced the plain card layout with a premium dark-navy dashboard. New top header bar contains the ARK icon, title, server profile chip, settings search bar (Ctrl+K), Basic/Advanced segmented toggle, and Save Changes/Validate/Export/Reset Category action buttons. Left sidebar rebuilt with grouped navigation (OVERVIEW/SERVER/GAMEPLAY/MANAGEMENT/ADVANCED), Segoe MDL2 icon glyphs, and a live server status card at the bottom. Overview page now shows three status cards (Quick Status, Configuration Health, Ports) with real live data, a Quick Configuration card with server name/map/install path controls plus a diagnostic strip (path exists, writable, disk space, executable status), quick action buttons, and a three-column configuration status strip (Configuration, INI Sync, Launch Arguments). Unsaved changes now show as a slim amber banner under the header instead of a large bottom save bar.
+
+---
+
+## v3.3.7
+
+### Fixed
+- **ARK ASA Settings — Configuration Health warnings** — the warning count was including every setting that has a "dangerous" or "repeated line" label, even on a brand-new server where nothing had been changed. A fresh profile showed 57 warnings. The count now only includes a setting's warning if the user has actually changed that setting from its default value.
+
+---
+
+## v3.3.6
+
+### Removed
+- **ARK ASA Settings** — removed the "Install / Update" nav item and its tab content from the settings sidebar. Install and update actions are available from the server tile on the Servers page.
+
+---
+
+## v3.3.5
+
+### Fixed
+- **Install / Update log** — SteamCMD writes download progress via the Windows Console API (not stdout/stderr), so redirecting those streams only ever captured the initial banner. Now tails SteamCMD's own `logs/content_log.txt` file in real-time, which contains all app state changes, download percentages, and error messages. Also set SteamCMD's working directory to its own folder so it can locate its config and log files correctly.
+
+---
+
+## v3.3.4
+
+### Fixed
+- **Install / Update log** — SteamCMD uses carriage returns (`\r`) to overwrite progress lines in-place. The previous reader only fired on newlines (`\n`) so download percentages and update state were never captured. Switched to a raw character reader that handles both terminators, so all SteamCMD output now streams to the UI.
+
+---
+
+## v3.3.3
+
+### Added
+- **Installer** — setup now shows a "Choose Install Location" page powered by Inno Setup, so users can pick where the app installs instead of being silently placed in AppData.
+
+### Fixed
+- **Install / Update log** — SteamCMD's download progress, update percentages, and status messages now stream live into the install panel. Previously only the initial stdout banner was shown; all meaningful output (which SteamCMD writes to stderr) was being captured to the log file but never displayed.
+
+---
+
 ## v3.3.2
 
 ## Fixed

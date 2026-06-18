@@ -26,7 +26,7 @@ public sealed class ServerInstallService : IDisposable
 
     public ServerInstallService(AppDataPaths paths)
     {
-        _steamCmd = new SteamCMDService();
+        _steamCmd = new SteamCMDService(paths.SteamCmdRoot, paths.LogsDirectory);
         _logsDirectory = paths.LogsDirectory;
     }
 

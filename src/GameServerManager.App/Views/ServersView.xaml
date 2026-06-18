@@ -1417,9 +1417,11 @@
                                    Foreground="#D0E4F4" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
                         <ProgressBar IsIndeterminate="True" Height="6" Margin="0,0,0,12"/>
                         <Border Background="#060E18" BorderBrush="#1A2E42" BorderThickness="1"
-                                CornerRadius="6" Padding="12" Margin="0,0,0,16" MinHeight="48" MaxHeight="140">
-                            <ScrollViewer VerticalScrollBarVisibility="Hidden">
-                                <TextBlock Text="{Binding InstallCurrentLine, Mode=OneWay}"
+                                CornerRadius="6" Padding="12" Margin="0,0,0,16" MinHeight="48" MaxHeight="260">
+                            <ScrollViewer x:Name="InstallLogScroll"
+                                          VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                                <TextBlock Text="{Binding InstallLogText, Mode=OneWay}"
                                            Foreground="#6A9AB8" FontFamily="Consolas" FontSize="12"
                                            TextWrapping="Wrap"/>
                             </ScrollViewer>

@@ -75,11 +75,19 @@ try {
         --channel stable `
         --outputDir $updaterFeedDir
 
-    $setup = Get-ChildItem -LiteralPath $updaterFeedDir -Filter "*Setup*.exe" | Select-Object -First 1
-    if (-not $setup) {
-        throw "Velopack did not create a setup executable."
-    }
-    Move-Item -LiteralPath $setup.FullName -Destination $setupPath -Force
+    $iscc = @(
+        "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+        "C:\Program Files\Inno Setup 6\ISCC.exe",
+        "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $iscc) { throw "Inno Setup 6 not found. Install it via: winget install JRSoftware.InnoSetup" }
+    $env:APP_VERSION = $version
+    $env:APP_SOURCE_DIR = $root
+    $env:APP_OUTPUT_DIR = $publicDir
+    $env:APP_OUTPUT_FILENAME = [System.IO.Path]::GetFileNameWithoutExtension($setupFileName)
+    & $iscc (Join-Path $root "scripts\release\installer.iss")
+    if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed (exit code $LASTEXITCODE)." }
+    if (-not (Test-Path $setupPath)) { throw "Inno Setup did not produce the expected file: $setupPath" }
 
     $artifacts = Get-ChildItem -LiteralPath $publicDir -File | Where-Object {
         $_.Name -ne $checksumsFileName

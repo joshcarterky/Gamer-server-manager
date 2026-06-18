@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using GameServerManager.App.ViewModels;
 
 namespace GameServerManager.App.Views
@@ -9,7 +11,17 @@ namespace GameServerManager.App.Views
         public ServersView()
         {
             InitializeComponent();
-            DataContext = new ServersViewModel();
+            var vm = new ServersViewModel();
+            DataContext = vm;
+            vm.PropertyChanged += OnViewModelPropertyChanged;
+        }
+
+        private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ServersViewModel.InstallLogText))
+            {
+                Dispatcher.InvokeAsync(() => InstallLogScroll.ScrollToEnd(), DispatcherPriority.Background);
+            }
         }
 
         private void OnPowerMenuClick(object sender, RoutedEventArgs e)

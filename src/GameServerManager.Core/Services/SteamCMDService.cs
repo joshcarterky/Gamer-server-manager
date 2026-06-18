@@ -24,13 +24,16 @@ namespace GameServerManager.Core.Services
         public event EventHandler<string>? LogOutput;
 
         public SteamCMDService()
+            : this(
+                Path.Combine(AppContext.BaseDirectory, "Tools", "SteamCMD"),
+                Path.Combine(AppContext.BaseDirectory, "Data", "Logs"))
         {
-            _installedDirectory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "GameServerManager", "Tools", "SteamCMD");
-            _logDirectory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "GameServerManager", "Logs");
+        }
+
+        public SteamCMDService(string steamCmdDirectory, string logDirectory)
+        {
+            _installedDirectory = steamCmdDirectory;
+            _logDirectory = logDirectory;
 
             Directory.CreateDirectory(_installedDirectory);
             Directory.CreateDirectory(_logDirectory);
@@ -198,26 +201,28 @@ namespace GameServerManager.Core.Services
                 process.StartInfo.RedirectStandardError = true;
                 process.StartInfo.CreateNoWindow = true;
 
-                process.OutputDataReceived += (_, e) =>
-                {
-                    if (e.Data == null) return;
-                    logBuilder.AppendLine(e.Data);
-                    progress?.Report(e.Data);
-                    StatusChanged?.Invoke(this, e.Data);
-                    LogOutput?.Invoke(this, e.Data);
-                };
-
-                process.ErrorDataReceived += (_, e) =>
-                {
-                    if (e.Data == null) return;
-                    logBuilder.AppendLine($"[stderr] {e.Data}");
-                };
-
+                // SteamCMD must run from its own directory so it can find its config and log files
+                process.StartInfo.WorkingDirectory = _installedDirectory;
                 process.Start();
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
 
                 StatusChanged?.Invoke(this, $"SteamCMD started (PID {process.Id})");
+
+                void HandleLine(string line)
+                {
+                    if (string.IsNullOrWhiteSpace(line)) return;
+                    logBuilder.AppendLine(line);
+                    progress?.Report(line);
+                    StatusChanged?.Invoke(this, line);
+                    LogOutput?.Invoke(this, line);
+                }
+
+                // stdout/stderr catch the banner; content_log.txt has the actual download progress
+                // SteamCMD writes progress via Windows Console API (not stdout/stderr), so we tail its log file
+                var stdoutTask = PipeStreamAsync(process.StandardOutput, HandleLine);
+                var stderrTask = PipeStreamAsync(process.StandardError, HandleLine);
+                using var tailCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                var contentLogPath = Path.Combine(_installedDirectory, "logs", "content_log.txt");
+                var tailTask = TailSteamCmdLogAsync(contentLogPath, HandleLine, tailCts.Token);
 
                 using var reg = cancellationToken.Register(() =>
                 {
@@ -233,6 +238,8 @@ namespace GameServerManager.Core.Services
                 });
 
                 await process.WaitForExitAsync(CancellationToken.None);
+                tailCts.Cancel();
+                await Task.WhenAll(stdoutTask, stderrTask, tailTask);
 
                 var dir = Path.GetDirectoryName(logFile);
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
@@ -262,12 +269,70 @@ namespace GameServerManager.Core.Services
         /// </summary>
         public string GetInstalledDirectory() => _installedDirectory;
 
-        /// <summary>
-        /// Disposes the service.
-        /// </summary>
+        // Tails steamcmd/logs/content_log.txt while SteamCMD is running.
+        // SteamCMD writes real download progress there, not to stdout/stderr.
+        private static async Task TailSteamCmdLogAsync(string path, Action<string> onLine, CancellationToken ct)
+        {
+            try
+            {
+                var deadline = DateTime.UtcNow.AddSeconds(15);
+                while (!File.Exists(path) && !ct.IsCancellationRequested)
+                {
+                    if (DateTime.UtcNow > deadline) return;
+                    await Task.Delay(200, ct);
+                }
+
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete);
+                // Seek to end so we only see new lines from this run
+                stream.Seek(0, SeekOrigin.End);
+                using var reader = new StreamReader(stream);
+
+                while (!ct.IsCancellationRequested)
+                {
+                    var line = await reader.ReadLineAsync();
+                    if (line is not null)
+                        onLine(line);
+                    else
+                        await Task.Delay(150, ct);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch { }
+        }
+
+        // Reads a stream char-by-char and fires onLine for every \n or \r boundary.
+        // BeginOutputReadLine only fires on \n — SteamCMD uses \r for progress overwrites.
+        private static async Task PipeStreamAsync(StreamReader reader, Action<string> onLine)
+        {
+            var buf = new char[4096];
+            var current = new System.Text.StringBuilder();
+            int read;
+            while ((read = await reader.ReadAsync(buf, 0, buf.Length)) > 0)
+            {
+                for (int i = 0; i < read; i++)
+                {
+                    var ch = buf[i];
+                    if (ch == '\n' || ch == '\r')
+                    {
+                        if (current.Length > 0)
+                        {
+                            onLine(current.ToString());
+                            current.Clear();
+                        }
+                    }
+                    else
+                    {
+                        current.Append(ch);
+                    }
+                }
+            }
+            if (current.Length > 0)
+                onLine(current.ToString());
+        }
+
         public void Dispose()
         {
-            // Cleanup if needed
         }
     }
 }

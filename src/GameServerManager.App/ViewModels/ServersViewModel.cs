@@ -88,7 +88,8 @@ public class ServersViewModel : BaseViewModel, IDisposable
     private bool _installValidateFiles = true;
     private bool _installRestartAfter;
     private string _installStage = string.Empty;
-    private string _installCurrentLine = string.Empty;
+    private string _installLogText = string.Empty;
+    private readonly System.Text.StringBuilder _installLogBuilder = new();
     private string _installResultMessage = string.Empty;
     private string _installLogPath = string.Empty;
     private ServerCardViewModel? _installTarget;
@@ -106,7 +107,7 @@ public class ServersViewModel : BaseViewModel, IDisposable
         _importService = new ServerImportService(paths);
         _profileValidator = new ServerProfileValidator();
         _installService = new ServerInstallService(paths);
-        AddServer = new AddServerWizardViewModel(_providers.Providers);
+        AddServer = new AddServerWizardViewModel(_providers.Providers, paths);
 
         ProviderFilters = new ObservableCollection<GameFilterOption>(
             new[] { new GameFilterOption("All Games") }
@@ -430,10 +431,10 @@ public class ServersViewModel : BaseViewModel, IDisposable
         private set => SetProperty(ref _installStage, value);
     }
 
-    public string InstallCurrentLine
+    public string InstallLogText
     {
-        get => _installCurrentLine;
-        private set => SetProperty(ref _installCurrentLine, value);
+        get => _installLogText;
+        private set => SetProperty(ref _installLogText, value);
     }
 
     public string InstallResultMessage
@@ -793,7 +794,8 @@ public class ServersViewModel : BaseViewModel, IDisposable
         InstallValidateFiles = true;
         InstallRestartAfter = false;
         _installStage = string.Empty;
-        _installCurrentLine = string.Empty;
+        _installLogBuilder.Clear();
+        _installLogText = string.Empty;
         _installResultMessage = string.Empty;
         _installLogPath = string.Empty;
         SetInstallPanelState(open: true, running: false, complete: false, success: false);
@@ -864,7 +866,11 @@ public class ServersViewModel : BaseViewModel, IDisposable
         var progress = new Progress<ServerInstallProgress>(p =>
         {
             InstallStage = p.Stage;
-            InstallCurrentLine = p.StatusLine;
+            if (!string.IsNullOrWhiteSpace(p.StatusLine))
+            {
+                _installLogBuilder.AppendLine(p.StatusLine);
+                InstallLogText = _installLogBuilder.ToString();
+            }
         });
 
         try

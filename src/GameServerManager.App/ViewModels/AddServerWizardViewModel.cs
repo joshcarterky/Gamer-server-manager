@@ -1,11 +1,13 @@
 using GameServerManager.Core.Models;
 using GameServerManager.GameProviders;
+using GameServerManager.Services;
 using System.IO;
 
 namespace GameServerManager.App.ViewModels;
 
 public class AddServerWizardViewModel : BaseViewModel
 {
+    private readonly AppDataPaths _paths;
     private IGameServerProvider? _selectedProvider;
     private int _currentStep = 1;
     private string _profileName = "New Server";
@@ -33,8 +35,9 @@ public class AddServerWizardViewModel : BaseViewModel
     private ServerProfile? _editingProfile;
     private bool _isEditMode;
 
-    public AddServerWizardViewModel(IReadOnlyCollection<IGameServerProvider> providers)
+    public AddServerWizardViewModel(IReadOnlyCollection<IGameServerProvider> providers, AppDataPaths? paths = null)
     {
+        _paths = paths ?? new AppDataPaths();
         Providers = providers
             .OrderBy(provider => GetWizardSortOrder(provider.GameName))
             .ThenBy(provider => provider.GameName)
@@ -107,14 +110,29 @@ public class AddServerWizardViewModel : BaseViewModel
         {
             if (SetProperty(ref _selectedProvider, value))
             {
-                ApplyProviderDefaults(value);
+                if (!_isEditMode)
+                    RegeneratePaths(value);
                 NotifyReviewChanged();
             }
         }
     }
 
     public string ProfileName { get => _profileName; set { if (SetProperty(ref _profileName, value)) NotifyReviewChanged(); } }
-    public string ServerName { get => _serverName; set { if (SetProperty(ref _serverName, value)) NotifyReviewChanged(); } }
+
+    public string ServerName
+    {
+        get => _serverName;
+        set
+        {
+            if (SetProperty(ref _serverName, value))
+            {
+                if (!_isEditMode)
+                    RegeneratePaths(_selectedProvider);
+                NotifyReviewChanged();
+            }
+        }
+    }
+
     public string Description { get => _description; set { if (SetProperty(ref _description, value)) NotifyReviewChanged(); } }
     public string Tags { get => _tags; set { if (SetProperty(ref _tags, value)) NotifyReviewChanged(); } }
     public string ServerPath { get => _serverPath; set { if (SetProperty(ref _serverPath, value)) NotifyReviewChanged(); } }
@@ -141,7 +159,7 @@ public class AddServerWizardViewModel : BaseViewModel
         $"Server Name: {ServerName}{Environment.NewLine}" +
         $"Description: {ValueOrDash(Description)}{Environment.NewLine}" +
         $"Tags: {ValueOrDash(Tags)}{Environment.NewLine}" +
-        $"Server Path: {ValueOrDash(ServerPath)}{Environment.NewLine}" +
+        $"Server Root: {ValueOrDash(ServerPath)}{Environment.NewLine}" +
         $"Install Directory: {InstallPath}{Environment.NewLine}" +
         $"Executable Path: {ExecutablePath}{Environment.NewLine}" +
         $"Save Directory: {ValueOrDash(SaveDirectory)}{Environment.NewLine}" +
@@ -154,15 +172,8 @@ public class AddServerWizardViewModel : BaseViewModel
         $"Auto Restart: {(AutoRestart ? "Enabled" : "Disabled")}{Environment.NewLine}" +
         $"Auto Backup: {(AutoBackup ? "Enabled" : "Disabled")}";
 
-    public void NextStep()
-    {
-        CurrentStep++;
-    }
-
-    public void PreviousStep()
-    {
-        CurrentStep--;
-    }
+    public void NextStep() => CurrentStep++;
+    public void PreviousStep() => CurrentStep--;
 
     public void Reset()
     {
@@ -197,9 +208,10 @@ public class AddServerWizardViewModel : BaseViewModel
         SaveDirectory = profile.Settings.TryGetValue("saveDirectory", out var saveDirectory)
             ? saveDirectory
             : Path.Combine(profile.InstallPath, provider.SavesFolder.Replace('/', Path.DirectorySeparatorChar));
-        BackupDirectory = profile.Settings.TryGetValue("backupDirectory", out var backupDirectory)
+        // Use stored backup directory; fall back to canonical location derived from the app root.
+        BackupDirectory = profile.Settings.TryGetValue("backupDirectory", out var backupDirectory) && !string.IsNullOrWhiteSpace(backupDirectory)
             ? backupDirectory
-            : Path.Combine("Data", "Backups", provider.GameId);
+            : _paths.GetServerBackupDirectory(profile.GameId, AppDataPaths.ToSlug(profile.ProfileName));
         IpAddress = profile.Settings.TryGetValue("ipAddress", out var ipAddress) ? ipAddress : "0.0.0.0";
         GamePort = GetProfilePort(profile, "Game");
         QueryPort = GetProfilePort(profile, "Query");
@@ -221,9 +233,7 @@ public class AddServerWizardViewModel : BaseViewModel
     public ServerProfile CreateProfile()
     {
         if (SelectedProvider == null)
-        {
             throw new InvalidOperationException("Select a game before saving.");
-        }
 
         var profile = new ServerProfile
         {
@@ -262,113 +272,68 @@ public class AddServerWizardViewModel : BaseViewModel
         foreach (var setting in SelectedProvider.SettingsDefinitions)
         {
             if (!string.IsNullOrWhiteSpace(setting.SettingKey) && setting.DefaultValue != null)
-            {
                 profile.Settings.TryAdd(setting.SettingKey, setting.DefaultValue);
-            }
         }
 
         return profile;
     }
 
-    private void ApplyProviderDefaults(IGameServerProvider? provider)
+    // ── Path generation ──────────────────────────────────────────────────────
+
+    private void RegeneratePaths(IGameServerProvider? provider)
     {
         if (provider == null)
-        {
             return;
-        }
 
-        InstallPath = provider.DefaultInstallFolder.Replace('/', Path.DirectorySeparatorChar);
-        ServerPath = InstallPath;
-        ExecutablePath = Path.Combine(InstallPath, provider.ExecutableRelativePath.Replace('/', Path.DirectorySeparatorChar));
-        SaveDirectory = Path.Combine(InstallPath, provider.SavesFolder.Replace('/', Path.DirectorySeparatorChar));
-        BackupDirectory = Path.Combine("Data", "Backups", provider.GameId);
+        var serverSlug = AppDataPaths.ToSlug(_serverName);
+        var installDir = _paths.GetServerInstallDirectory(provider.GameId, serverSlug);
+
+        ServerPath = _paths.GetServerRoot(provider.GameId, serverSlug);
+        InstallPath = installDir;
+        ExecutablePath = Path.Combine(installDir, provider.ExecutableRelativePath.Replace('/', Path.DirectorySeparatorChar));
+        SaveDirectory = Path.Combine(installDir, provider.SavesFolder.Replace('/', Path.DirectorySeparatorChar));
+        BackupDirectory = _paths.GetServerBackupDirectory(provider.GameId, serverSlug);
         MapName = provider.GameId == "minecraft_java" ? "world" : string.Empty;
         GamePort = GetDefaultPort(provider, "Game");
         QueryPort = GetDefaultPort(provider, "Query");
         RconPort = GetDefaultPort(provider, "RCON");
     }
 
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
     private IEnumerable<ServerPort> CreatePorts()
     {
-        if (GamePort > 0)
-        {
-            yield return CreatePort("Game", GamePort, PortProtocol.UDP);
-        }
-
-        if (QueryPort > 0)
-        {
-            yield return CreatePort("Query", QueryPort, PortProtocol.UDP);
-        }
-
-        if (RconPort > 0)
-        {
-            yield return CreatePort("RCON", RconPort, PortProtocol.TCP);
-        }
+        if (GamePort > 0) yield return CreatePort("Game", GamePort, PortProtocol.UDP);
+        if (QueryPort > 0) yield return CreatePort("Query", QueryPort, PortProtocol.UDP);
+        if (RconPort > 0) yield return CreatePort("RCON", RconPort, PortProtocol.TCP);
     }
 
-    private void NotifyReviewChanged()
-    {
-        OnPropertyChanged(nameof(ReviewText));
-    }
+    private void NotifyReviewChanged() => OnPropertyChanged(nameof(ReviewText));
 
     private static ServerPort CreatePort(string name, int port, PortProtocol protocol)
-    {
-        return new ServerPort
-        {
-            Name = name,
-            Port = port,
-            DefaultPort = port,
-            Protocol = protocol,
-            IsRequired = name != "RCON"
-        };
-    }
+        => new() { Name = name, Port = port, DefaultPort = port, Protocol = protocol, IsRequired = name != "RCON" };
 
     private static int GetDefaultPort(IGameServerProvider provider, string name)
-    {
-        return provider.DefaultPorts
-            .FirstOrDefault(port => port.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
-            ?.Port ?? 0;
-    }
+        => provider.DefaultPorts.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Port ?? 0;
 
     private static int GetProfilePort(ServerProfile profile, string name)
-    {
-        return profile.Ports
-            .FirstOrDefault(port => port.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
-            ?.Port ?? 0;
-    }
+        => profile.Ports.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Port ?? 0;
 
     private static int ParseIntSetting(ServerProfile profile, string key, int fallback)
-    {
-        return profile.Settings.TryGetValue(key, out var value) && int.TryParse(value, out var parsed)
-            ? parsed
-            : fallback;
-    }
+        => profile.Settings.TryGetValue(key, out var value) && int.TryParse(value, out var parsed) ? parsed : fallback;
 
-    private static string ValueOrDash(string value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? "-" : value;
-    }
+    private static string ValueOrDash(string value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
     private static int GetWizardSortOrder(string gameName)
     {
         var orderedNames = new[]
         {
-            "ARK: Survival Ascended",
-            "ARK: Survival Evolved",
-            "Minecraft Java",
-            "Minecraft Bedrock",
-            "7 Days To Die",
-            "Palworld",
-            "Rust",
-            "Valheim",
-            "Conan Exiles",
-            "Project Zomboid",
-            "Satisfactory",
-            "Factorio",
-            "Generic Server"
+            "ARK: Survival Ascended", "ARK: Survival Evolved",
+            "Minecraft Java", "Minecraft Bedrock",
+            "7 Days To Die", "Palworld", "Rust", "Valheim",
+            "Conan Exiles", "Project Zomboid", "Satisfactory", "Factorio", "Generic Server"
         };
-
-        var index = Array.FindIndex(orderedNames, name => name.Equals(gameName, StringComparison.OrdinalIgnoreCase));
+        var index = Array.FindIndex(orderedNames, n => n.Equals(gameName, StringComparison.OrdinalIgnoreCase));
         return index < 0 ? int.MaxValue : index;
     }
 }

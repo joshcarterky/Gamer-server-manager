@@ -120,7 +120,18 @@ namespace GameServerManager.App.Views
         {
             PageTitleText.Text = "ARK ASA Settings";
             SetActiveButton(ServersButton);
-            MainContentArea.Content = new ArkAsaSettingsView(profile);
+            try
+            {
+                MainContentArea.Content = new ArkAsaSettingsView(profile);
+            }
+            catch (Exception ex)
+            {
+                GameServerManager.Services.AppDataPaths paths = new();
+                var logPath = System.IO.Path.Combine(paths.LogsDirectory, "crash.log");
+                System.IO.Directory.CreateDirectory(paths.LogsDirectory);
+                System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] OpenArkAsaSettings: {ex}\n\n");
+                System.Windows.MessageBox.Show($"Failed to open ARK ASA Settings:\n\n{ex.Message}\n\nSee Logs/crash.log for details.", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
         }
 
         private void SetActiveButton(Button activeButton)

@@ -77,7 +77,7 @@ public class BackupService
             return backupDirectory;
         }
 
-        return Path.Combine(_paths.BackupsDirectory, "Servers", Sanitize(profile.ProfileName));
+        return Path.Combine(_paths.BackupsRoot, AppDataPaths.ToSlug(profile.GameId), Sanitize(profile.ProfileName));
     }
 
     private static string Sanitize(string value)

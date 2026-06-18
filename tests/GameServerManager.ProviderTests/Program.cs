@@ -83,6 +83,17 @@ TestDiagnosticsMaskSecrets();
 TestPortableModeDetection();
 TestReleaseVersionStamp();
 await TestServerInstallServiceValidationAsync();
+TestArkWinLiveMaxPlayers();
+await TestArkMaxPlayersNotInIniAsync();
+TestArkActiveModsNotGenerated();
+await TestArkIniRoundTripAsync();
+await TestArkCommentsPreservedAsync();
+TestArkMultiServerIsolation();
+TestArkDecimalFormatting();
+TestArkPasswordRedaction();
+TestArkModOrdering();
+await TestArkMigrationDetectionAsync();
+await TestArkMinimalIniCreationAsync();
 
 Console.WriteLine("Provider and server data tests passed.");
 
@@ -654,20 +665,18 @@ static void TestArkSettingsRedesignContracts()
     var xamlPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "GameServerManager.App", "Views", "ArkAsaSettingsView.xaml"));
     var xaml = File.ReadAllText(xamlPath);
     Assert(xaml.Contains("NavigationGroups", StringComparison.Ordinal), "ARK settings UI should use grouped navigation.");
-    Assert(xaml.Contains("Server Overview", StringComparison.Ordinal), "ARK settings UI should include a designed overview page.");
+    Assert(xaml.Contains("IsOverviewTab", StringComparison.Ordinal), "ARK settings UI should include an overview tab binding.");
     Assert(xaml.Contains("BooleanValue", StringComparison.Ordinal), "ARK settings UI should bind boolean settings to a checkbox editor.");
     Assert(!xaml.Contains("ItemsSource=\"{Binding Tabs}\" SelectedItem=\"{Binding SelectedTab}\"", StringComparison.Ordinal), "ARK settings navigation should not use the old flat tab list.");
     Assert(!xaml.Contains("Launch Command Preview", StringComparison.Ordinal), "Launch command preview must not be rendered as a global panel.");
     Assert(!xaml.Contains("SteamCMD Install / Update", StringComparison.Ordinal), "SteamCMD command must not be rendered as a global panel.");
     Assert(!xaml.Contains("Text=\"Current vs Pending Config\"", StringComparison.Ordinal), "Old global configuration diff panel must not be rendered.");
     Assert(xaml.Contains("Visibility=\"{Binding IsHealthValidationTab", StringComparison.Ordinal), "Health and Validation should own the diff page.");
-    Assert(xaml.Contains("Visibility=\"{Binding IsInstallUpdateTab", StringComparison.Ordinal), "Install / Update should own SteamCMD install content.");
     Assert(xaml.Contains("Visibility=\"{Binding IsStartupTab", StringComparison.Ordinal), "Startup should own launch command content.");
     Assert(xaml.Contains("Visibility=\"{Binding IsRawEditorTab", StringComparison.Ordinal), "Raw INI Editor should own raw file editors.");
-    Assert(xaml.Contains("Header=\"Technical Command Preview\"", StringComparison.Ordinal), "SteamCMD command preview should be collapsed by default.");
     Assert(xaml.Contains("Header=\"View Generated Command\"", StringComparison.Ordinal), "Launch command preview should be collapsed by default.");
     Assert(xaml.Contains("RawGameUserSettingsEditorText", StringComparison.Ordinal), "Raw editor should bind through masked editor text.");
-    Assert(xaml.Contains("GroupName=\"ArkSettingsMode\"", StringComparison.Ordinal), "Basic and Advanced mode should use one segmented radio group.");
+    Assert(xaml.Contains("GroupName=\"ArkMode\"", StringComparison.Ordinal), "Basic and Advanced mode should use one segmented radio group.");
     Assert(!xaml.Contains("CheckBox Content=\"Advanced\"", StringComparison.Ordinal), "Advanced mode should not be a checkbox.");
 
     var viewModelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "GameServerManager.App", "ViewModels", "ArkAsaSettingsViewModel.cs"));
@@ -820,6 +829,245 @@ static ServerProfile CreateArkClusterTestProfile(IGameServerProvider provider)
             ["RCONEnabled"] = "True"
         }
     };
+}
+
+static void TestArkWinLiveMaxPlayers()
+{
+    var registry = GameProviderRegistry.CreateDefault();
+    registry.TryGetProvider(ArkSurvivalAscendedServerProfile.GameId, out var provider);
+    var profile = new ServerProfile
+    {
+        Id = "mp-test",
+        GameId = ArkSurvivalAscendedServerProfile.GameId,
+        ProfileName = "MP Test",
+        ServerName = "MP Test",
+        InstallPath = "C:\\Servers\\ARK",
+        MaxPlayers = 32,
+        Ports = provider!.DefaultPorts.Select(p => new ServerPort { Name = p.Name, Port = p.Port, DefaultPort = p.DefaultPort, Protocol = p.Protocol, IsRequired = p.IsRequired }).ToList()
+    };
+    var command = provider.BuildStartCommand(profile);
+    Assert(command.Arguments.Contains("-WinLiveMaxPlayers=32", StringComparison.Ordinal), "ARK ASA should use -WinLiveMaxPlayers= dash flag, not MaxPlayers= URL parameter.");
+    Assert(!command.Arguments.Contains("?MaxPlayers=", StringComparison.OrdinalIgnoreCase), "ARK ASA should not emit legacy URL-style ?MaxPlayers= query parameter.");
+}
+
+static async Task TestArkMaxPlayersNotInIniAsync()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var mapper = new ArkAsaProfileMapper();
+        var ark = new ArkSurvivalAscendedServerProfile();
+        ark.Basic.InstallPath = tempRoot;
+        ark.Basic.MaxPlayers = 50;
+        mapper.HydratePaths(ark);
+        Directory.CreateDirectory(ark.Paths.ConfigPath);
+        File.WriteAllText(ark.Paths.GameUserSettingsPath, "[ServerSettings]\r\nMaxPlayers=70\r\n");
+        File.WriteAllText(ark.Paths.GameIniPath, "[/script/shootergame.shootergamemode]\r\n");
+
+        await new ArkAsaConfigService().SaveAsync(ark);
+        var savedGus = File.ReadAllText(ark.Paths.GameUserSettingsPath);
+        Assert(!savedGus.Contains("MaxPlayers=", StringComparison.Ordinal), "SaveAsync must not write MaxPlayers to GameUserSettings.ini; ASA uses -WinLiveMaxPlayers launch flag.");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
+}
+
+static void TestArkActiveModsNotGenerated()
+{
+    var mapper = new ArkAsaProfileMapper();
+    var ark = new ArkSurvivalAscendedServerProfile();
+    ark.Basic.InstallPath = "C:\\Servers\\ARK";
+    mapper.HydratePaths(ark);
+    ark.Mods.EnabledMods.Add(new ArkModEntry { Id = "928708", Enabled = true });
+    ark.Mods.EnabledMods.Add(new ArkModEntry { Id = "929110", Enabled = true });
+
+    var preview = new ArkAsaLaunchBuilder().Build(ark, revealPasswords: true);
+    Assert(preview.Arguments.Contains("-mods=928708,929110", StringComparison.Ordinal), "ARK ASA should emit mods as -mods= launch flag.");
+    Assert(!preview.Arguments.Contains("ActiveMods", StringComparison.Ordinal), "ARK ASA must not emit the obsolete ActiveMods INI key in the launch command.");
+}
+
+static async Task TestArkIniRoundTripAsync()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var mapper = new ArkAsaProfileMapper();
+        var ark = new ArkSurvivalAscendedServerProfile();
+        ark.Basic.InstallPath = tempRoot;
+        mapper.HydratePaths(ark);
+        Directory.CreateDirectory(ark.Paths.ConfigPath);
+        File.WriteAllText(ark.Paths.GameUserSettingsPath, "[ServerSettings]\r\nTamingSpeedMultiplier=3.0\r\nServerPVE=False\r\n");
+        File.WriteAllText(ark.Paths.GameIniPath, "[/script/shootergame.shootergamemode]\r\nMatingIntervalMultiplier=0.5\r\n");
+
+        var state = await new ArkAsaConfigurationStateService().LoadAsync("roundtrip", ark);
+        Assert(ark.GameUserSettings.ServerSettings["TamingSpeedMultiplier"] == "3.0", "Round-trip: loaded taming speed from INI.");
+        Assert(ark.GameIni.ShooterGameModeSettings["MatingIntervalMultiplier"] == "0.5", "Round-trip: loaded mating interval from Game.ini.");
+
+        ark.GameUserSettings.ServerSettings["TamingSpeedMultiplier"] = "5.0";
+        ark.GameIni.ShooterGameModeSettings["MatingIntervalMultiplier"] = "0.25";
+        await new ArkAsaConfigService().SaveAsync(ark, createBackup: false);
+
+        var reloaded = new ArkSurvivalAscendedServerProfile();
+        reloaded.Basic.InstallPath = tempRoot;
+        mapper.HydratePaths(reloaded);
+        await new ArkAsaConfigurationStateService().LoadAsync("roundtrip", reloaded);
+        Assert(reloaded.GameUserSettings.ServerSettings["TamingSpeedMultiplier"] == "5.0", "Round-trip: reloaded taming speed matches saved value.");
+        Assert(reloaded.GameIni.ShooterGameModeSettings["MatingIntervalMultiplier"] == "0.25", "Round-trip: reloaded mating interval matches saved value.");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
+}
+
+static async Task TestArkCommentsPreservedAsync()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var mapper = new ArkAsaProfileMapper();
+        var ark = new ArkSurvivalAscendedServerProfile();
+        ark.Basic.InstallPath = tempRoot;
+        mapper.HydratePaths(ark);
+        Directory.CreateDirectory(ark.Paths.ConfigPath);
+        File.WriteAllText(ark.Paths.GameUserSettingsPath, "; My important comment\r\n[ServerSettings]\r\n; Another comment\r\nTamingSpeedMultiplier=1.0\r\n");
+        File.WriteAllText(ark.Paths.GameIniPath, "[/script/shootergame.shootergamemode]\r\n; Game ini comment\r\n");
+
+        await new ArkAsaConfigurationStateService().LoadAsync("comments", ark);
+        ark.GameUserSettings.ServerSettings["TamingSpeedMultiplier"] = "2.0";
+        await new ArkAsaConfigService().SaveAsync(ark, createBackup: false);
+
+        var saved = File.ReadAllText(ark.Paths.GameUserSettingsPath);
+        Assert(saved.Contains("; My important comment", StringComparison.Ordinal), "Save must preserve top-level comments.");
+        Assert(saved.Contains("; Another comment", StringComparison.Ordinal), "Save must preserve inline section comments.");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
+}
+
+static void TestArkMultiServerIsolation()
+{
+    var mapper = new ArkAsaProfileMapper();
+    var arkA = new ArkSurvivalAscendedServerProfile();
+    arkA.Basic.InstallPath = "C:\\Servers\\ARK_A";
+    mapper.HydratePaths(arkA);
+
+    var arkB = new ArkSurvivalAscendedServerProfile();
+    arkB.Basic.InstallPath = "C:\\Servers\\ARK_B";
+    mapper.HydratePaths(arkB);
+
+    Assert(arkA.Paths.GameUserSettingsPath != arkB.Paths.GameUserSettingsPath, "Two server profiles must have distinct GameUserSettings.ini paths.");
+    Assert(arkA.Paths.GameIniPath != arkB.Paths.GameIniPath, "Two server profiles must have distinct Game.ini paths.");
+}
+
+static void TestArkDecimalFormatting()
+{
+    var doc = IniDocument.Parse("[ServerSettings]\r\nTamingSpeedMultiplier=1.5\r\n");
+    doc.SetValue("ServerSettings", "TamingSpeedMultiplier", (1.25m).ToString(System.Globalization.CultureInfo.InvariantCulture));
+    var rendered = doc.Render();
+    Assert(rendered.Contains("TamingSpeedMultiplier=1.25", StringComparison.Ordinal), "Decimal values must be formatted with a period separator regardless of locale.");
+    Assert(!rendered.Contains("1,25", StringComparison.Ordinal), "Decimal values must not use a comma separator.");
+}
+
+static void TestArkPasswordRedaction()
+{
+    var mapper = new ArkAsaProfileMapper();
+    var ark = new ArkSurvivalAscendedServerProfile();
+    ark.Basic.InstallPath = "C:\\Servers\\ARK";
+    ark.Basic.ServerPassword = "join-secret";
+    ark.Basic.AdminPassword = "admin-secret";
+    mapper.HydratePaths(ark);
+
+    var maskedPreview = new ArkAsaLaunchBuilder().Build(ark, revealPasswords: false);
+    Assert(!maskedPreview.CommandLine.Contains("join-secret", StringComparison.Ordinal), "Masked preview must not reveal server password.");
+    Assert(!maskedPreview.CommandLine.Contains("admin-secret", StringComparison.Ordinal), "Masked preview must not reveal admin password.");
+    Assert(maskedPreview.CommandLine.Contains("********", StringComparison.Ordinal), "Masked preview must replace password with mask.");
+
+    var revealedPreview = new ArkAsaLaunchBuilder().Build(ark, revealPasswords: true);
+    Assert(revealedPreview.CommandLine.Contains("join-secret", StringComparison.Ordinal), "Revealed preview must show server password when requested.");
+    Assert(revealedPreview.CommandLine.Contains("admin-secret", StringComparison.Ordinal), "Revealed preview must show admin password when requested.");
+}
+
+static void TestArkModOrdering()
+{
+    var mapper = new ArkAsaProfileMapper();
+    var ark = new ArkSurvivalAscendedServerProfile();
+    ark.Basic.InstallPath = "C:\\Servers\\ARK";
+    mapper.HydratePaths(ark);
+    ark.Mods.EnabledMods.Add(new ArkModEntry { Id = "111111", Enabled = true });
+    ark.Mods.EnabledMods.Add(new ArkModEntry { Id = "222222", Enabled = true });
+    ark.Mods.EnabledMods.Add(new ArkModEntry { Id = "333333", Enabled = true });
+    ark.Mods.EnabledMods.Add(new ArkModEntry { Id = "444444", Enabled = false }); // disabled
+
+    var preview = new ArkAsaLaunchBuilder().Build(ark);
+    Assert(preview.Arguments.Contains("-mods=111111,222222,333333", StringComparison.Ordinal), "Mod order in -mods= must match enabled mod list order.");
+    Assert(!preview.Arguments.Contains("444444", StringComparison.Ordinal), "Disabled mods must not appear in -mods= argument.");
+}
+
+static async Task TestArkMigrationDetectionAsync()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var mapper = new ArkAsaProfileMapper();
+        var ark = new ArkSurvivalAscendedServerProfile();
+        ark.Basic.InstallPath = tempRoot;
+        mapper.HydratePaths(ark);
+        Directory.CreateDirectory(ark.Paths.ConfigPath);
+        File.WriteAllText(ark.Paths.GameUserSettingsPath, "[ServerSettings]\r\nMaxPlayers=70\r\nActiveMods=928708\r\nTamingSpeedMultiplier=1.0\r\n");
+        File.WriteAllText(ark.Paths.GameIniPath, "[/script/shootergame.shootergamemode]\r\n");
+
+        var state = await new ArkAsaConfigurationStateService().LoadAsync("migration", ark);
+        Assert(state.MigrationResult.HasWarnings, "Migration detection should find obsolete MaxPlayers and ActiveMods keys.");
+        Assert(state.MigrationResult.Warnings.Any(w => w.Contains("MaxPlayers", StringComparison.Ordinal)), "Migration result should warn about obsolete MaxPlayers key.");
+        Assert(state.MigrationResult.Warnings.Any(w => w.Contains("ActiveMods", StringComparison.Ordinal)), "Migration result should warn about obsolete ActiveMods key.");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
+}
+
+static async Task TestArkMinimalIniCreationAsync()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var mapper = new ArkAsaProfileMapper();
+        var ark = new ArkSurvivalAscendedServerProfile();
+        ark.Basic.InstallPath = tempRoot;
+        mapper.HydratePaths(ark);
+
+        ArkAsaConfigService.EnsureConfigFilesExist(ark);
+
+        Assert(File.Exists(ark.Paths.GameUserSettingsPath), "EnsureConfigFilesExist must create GameUserSettings.ini.");
+        Assert(File.Exists(ark.Paths.GameIniPath), "EnsureConfigFilesExist must create Game.ini.");
+
+        var gusText = File.ReadAllText(ark.Paths.GameUserSettingsPath);
+        var gameText = File.ReadAllText(ark.Paths.GameIniPath);
+        Assert(gusText.Contains("[ServerSettings]", StringComparison.Ordinal), "Created GameUserSettings.ini must include [ServerSettings] section header.");
+        Assert(gameText.Contains("[/script/shootergame.shootergamemode]", StringComparison.Ordinal), "Created Game.ini must include [/script/shootergame.shootergamemode] section header.");
+
+        var gus = IniDocument.Parse(gusText);
+        var game = IniDocument.Parse(gameText);
+        Assert(gus != null, "Created GameUserSettings.ini should parse without error.");
+        Assert(game != null, "Created Game.ini should parse without error.");
+
+        // Calling again must not truncate existing content
+        ArkAsaConfigService.EnsureConfigFilesExist(ark);
+        Assert(File.ReadAllText(ark.Paths.GameUserSettingsPath) == gusText, "EnsureConfigFilesExist must not overwrite existing files.");
+
+        // Should also load cleanly from disk
+        await new ArkAsaConfigurationStateService().LoadAsync("minimal-create", ark);
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
 }
 
 static string CreateTempRoot()

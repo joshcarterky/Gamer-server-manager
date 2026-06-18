@@ -50,7 +50,7 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
         _processService = new ServerProcessService(_providers, _paths);
         _logger = new ArkClusterLogger(_paths);
         _modSync = new ArkClusterModSyncService(_serversJsonService, _logger);
-        _clusterDirectoryOverride = Path.Combine(Environment.CurrentDirectory, "Servers", "ARK_ASA_Cluster");
+        _clusterDirectoryOverride = Path.Combine(_paths.ServersDirectory, "ARK_ASA_Cluster");
 
         KnownMaps = new ObservableCollection<ArkAsaKnownMap>(ArkAsaClusterManager.KnownMaps);
         ClusterMaps = new ObservableCollection<ArkClusterMapCardViewModel>();
@@ -224,7 +224,7 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
                 string.IsNullOrWhiteSpace(NewSessionName) ? display : NewSessionName,
                 selected.InternalName, mapName,
                 string.IsNullOrWhiteSpace(NewAltSaveDirectoryName) ? selected.DefaultAltSaveDirectoryName : NewAltSaveDirectoryName,
-                Path.Combine(Environment.CurrentDirectory, "Servers", "ARK_Survival_Ascended", Sanitize(display)),
+                Path.Combine(_paths.ServersDirectory, "ark-survival-ascended", Sanitize(display)),
                 NextGamePort, NextQueryPort, NextRconPort, MaxPlayers, SharedBackupEnabled,
                 NoTransferFromFiltering, PreventDownloadSurvivors, PreventDownloadItems, PreventDownloadDinos,
                 PreventUploadSurvivors, PreventUploadItems, PreventUploadDinos, AllowTributeDownloads);
@@ -560,7 +560,7 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
 
         if (string.IsNullOrWhiteSpace(ClusterDirectoryOverride))
         {
-            ClusterDirectoryOverride = Path.Combine(Environment.CurrentDirectory, "Servers", "ARK_ASA_Cluster", ClusterId);
+            ClusterDirectoryOverride = Path.Combine(_paths.ServersDirectory, "ARK_ASA_Cluster", ClusterId);
         }
 
         Message = "Cluster defaults are ready. Add at least two maps, then apply.";
@@ -571,7 +571,7 @@ public sealed class ArkAsaClusterViewModel : BaseViewModel, IDisposable
         ClusterId = $"asa-{Guid.NewGuid():N}"[..16];
         if (string.IsNullOrWhiteSpace(ClusterDirectoryOverride))
         {
-            ClusterDirectoryOverride = Path.Combine(Environment.CurrentDirectory, "Servers", "ARK_ASA_Cluster", ClusterId);
+            ClusterDirectoryOverride = Path.Combine(_paths.ServersDirectory, "ARK_ASA_Cluster", ClusterId);
         }
     }
 
