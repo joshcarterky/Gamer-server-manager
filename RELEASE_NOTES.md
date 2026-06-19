@@ -1,5 +1,19 @@
 # Release Notes
 
+## v3.4.2
+
+### Fixed
+- **Fullscreen clipping** — maximizing the window cut off content on all four edges. With `WindowStyle="None"` and `WindowChrome.ResizeBorderThickness="6"`, Windows expands the window 6 px past each screen edge when maximized. `Shell` now overrides `OnStateChanged` to apply a matching 6 px margin to `ShellFrame` when maximized and removes it on restore.
+
+---
+
+## v3.4.1
+
+### Fixed
+- **ARK ASA — Max Players missing from settings UI** — `MaxPlayers` and `SessionName` had category `"Server Identity"` which matched no tab, making Max Players invisible in every settings tab. Both are now categorised under `Admin / Passwords` and appear in that tab under the Access Control section.
+
+---
+
 ## v3.4.0
 
 ### Fixed

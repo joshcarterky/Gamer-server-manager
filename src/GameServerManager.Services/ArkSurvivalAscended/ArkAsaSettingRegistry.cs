@@ -33,7 +33,7 @@ public static class ArkAsaSettingRegistry
         AddLaunch(settings, "QueryPort", "Query Port", "UDP server query port.", "Network / Ports", ArkSettingDataType.Integer, "27015", 1, 65535);
         AddLaunch(settings, "RCONPort", "RCON Port", "TCP remote console port.", "RCON / Console", ArkSettingDataType.Integer, "27020", 1, 65535);
         AddLaunch(settings, "RCONEnabled", "Enable RCON", "Allow remote console connections.", "RCON / Console", ArkSettingDataType.Boolean, "True");
-        AddLaunch(settings, "MaxPlayers", "Max Players", "Maximum player slots.", "Server Identity", ArkSettingDataType.Integer, "70", 1, 200);
+        AddLaunch(settings, "MaxPlayers", "Max Players", "Maximum player slots.", "Admin / Passwords", ArkSettingDataType.Integer, "70", 1, 200);
         AddLaunch(settings, "AltSaveDirectoryName", "Alt Save Directory", "Per-instance save folder name.", "Maps", ArkSettingDataType.String, string.Empty);
         AddLaunch(settings, "ClusterID", "Cluster ID", "Shared ID used by clustered ARK maps.", "Cluster", ArkSettingDataType.String, string.Empty, advanced: true);
         AddLaunch(settings, "ClusterDirOverride", "Cluster Directory Override", "Shared cluster transfer directory.", "Cluster", ArkSettingDataType.String, string.Empty, advanced: true);
@@ -48,7 +48,6 @@ public static class ArkAsaSettingRegistry
             ("ServerPassword", "Server Password", ArkSettingDataType.Password, "", "Server Identity", null, null),
             ("ServerAdminPassword", "Server Admin Password", ArkSettingDataType.Password, "", "Server Identity", null, null),
             ("SpectatorPassword", "Spectator Password", ArkSettingDataType.Password, "", "Server Identity", null, null),
-            ("MaxPlayers", "Max Players", ArkSettingDataType.Integer, "70", "Server Identity", 1m, 200m),
             ("AdminLogging", "Admin Logging", ArkSettingDataType.Boolean, "False", "Server Identity", null, null),
             ("ServerPVE", "PvE Server", ArkSettingDataType.Boolean, "True", "PvE / PvP Rules", null, null),
             ("ShowMapPlayerLocation", "Show Map Player Location", ArkSettingDataType.Boolean, "False", "Player Settings", null, null),

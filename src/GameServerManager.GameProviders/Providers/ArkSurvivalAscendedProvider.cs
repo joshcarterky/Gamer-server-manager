@@ -33,9 +33,9 @@ public class ArkSurvivalAscendedProvider : GameServerProviderBase
 
     public override IReadOnlyList<ServerSettingDefinition> SettingsDefinitions => new[]
     {
-        Text("SessionName", "Session Name", "ARK ASA Server", true, "Server Identity"),
+        Text("SessionName", "Session Name", "ARK ASA Server", true, "Admin / Passwords"),
         Text("MapName", "Map Name", "TheIsland_WP", true, "Maps"),
-        Number("MaxPlayers", "Max Players", "70", 1, 200, "Server Identity"),
+        Number("MaxPlayers", "Max Players", "70", 1, 200, "Admin / Passwords"),
         Number("Port", "Game Port", "7777", 1, 65535, "Network / Ports"),
         Number("QueryPort", "Query Port", "27015", 1, 65535, "Network / Ports"),
         Number("RCONPort", "RCON Port", "27020", 1, 65535, "RCON / Console"),

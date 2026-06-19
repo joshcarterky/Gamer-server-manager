@@ -416,67 +416,6 @@
                     </Grid>
                 </Border>
 
-                <!-- Basic / Advanced segmented toggle -->
-                <Border Grid.Column="4" Background="#06101A" BorderBrush="#1E3349" BorderThickness="1"
-                        CornerRadius="8" Margin="0,11,12,11" Padding="3">
-                    <StackPanel Orientation="Horizontal">
-                        <RadioButton Content="Basic" GroupName="ArkMode" IsChecked="{Binding IsBasicMode, Mode=TwoWay}">
-                            <RadioButton.Style>
-                                <Style TargetType="RadioButton">
-                                    <Setter Property="Foreground" Value="#7A94B0"/>
-                                    <Setter Property="Background" Value="Transparent"/>
-                                    <Setter Property="Padding" Value="14,5"/>
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}">
-                                                    <TextBlock Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" FontSize="12" FontWeight="SemiBold"/>
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="Bg" Property="Background" Value="#2563EB"/>
-                                                        <Setter Property="Foreground" Value="White"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="Bg" Property="Background" Value="#142A40"/>
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </RadioButton.Style>
-                        </RadioButton>
-                        <RadioButton Content="Advanced" GroupName="ArkMode" IsChecked="{Binding IsAdvancedMode, Mode=TwoWay}">
-                            <RadioButton.Style>
-                                <Style TargetType="RadioButton">
-                                    <Setter Property="Foreground" Value="#7A94B0"/>
-                                    <Setter Property="Background" Value="Transparent"/>
-                                    <Setter Property="Padding" Value="14,5"/>
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}">
-                                                    <TextBlock Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" FontSize="12" FontWeight="SemiBold"/>
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="Bg" Property="Background" Value="#2563EB"/>
-                                                        <Setter Property="Foreground" Value="White"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="Bg" Property="Background" Value="#142A40"/>
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </RadioButton.Style>
-                        </RadioButton>
-                    </StackPanel>
-                </Border>
-
                 <!-- Header action buttons -->
                 <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Content="Save Changes" Command="{Binding SaveCommand}" Style="{StaticResource HeaderPrimaryButton}"/>
@@ -1418,10 +1357,6 @@
                             <TextBlock Text="Server Startup" Foreground="White" FontWeight="SemiBold" Margin="0,0,0,8"/>
                             <UniformGrid Columns="2">
                                 <StackPanel Margin="0,0,12,12">
-                                    <TextBlock Text="Map" Style="{StaticResource Label}"/>
-                                    <ComboBox ItemsSource="{Binding OfficialMaps}" SelectedValue="{Binding MapName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedValuePath="InternalName" DisplayMemberPath="DisplayName" Style="{StaticResource ComboInput}"/>
-                                </StackPanel>
-                                <StackPanel Margin="0,0,0,12">
                                     <TextBlock Text="Session Name" Style="{StaticResource Label}"/>
                                     <TextBox Text="{Binding ServerName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}"/>
                                 </StackPanel>
@@ -1562,6 +1497,26 @@
                                                                                 </Style>
                                                                             </TextBox.Style>
                                                                         </TextBox>
+                                                                        <StackPanel>
+                                                                            <StackPanel.Style>
+                                                                                <Style TargetType="StackPanel">
+                                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    <Style.Triggers>
+                                                                                        <DataTrigger Binding="{Binding IsMapSetting}" Value="True">
+                                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                                        </DataTrigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                            </StackPanel.Style>
+                                                                            <ComboBox ItemsSource="{Binding MapChoices}"
+                                                                                      SelectedItem="{Binding SelectedMapChoice, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                                      DisplayMemberPath="DisplayName"
+                                                                                      Style="{StaticResource ComboInput}"/>
+                                                                            <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                                                                                     Style="{StaticResource Input}"
+                                                                                     Margin="0,4,0,0"
+                                                                                     Visibility="{Binding ShowCustomMapInput, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                                                        </StackPanel>
                                                                     </Grid>
                                                                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
                                                                         <Button Content="Reset" Command="{Binding ResetToSavedCommand}" Style="{StaticResource ActionButton}" Margin="0"/>
@@ -1592,7 +1547,17 @@
                                 <TabItem Header="GameUserSettings.ini">
                                     <Border Style="{StaticResource Panel}">
                                         <StackPanel>
-                                            <TextBlock Text="{Binding GameUserSettingsPath}" Style="{StaticResource Label}"/>
+                                            <Grid Margin="0,0,0,6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding GameUserSettingsPath}" Style="{StaticResource Label}" VerticalAlignment="Center"/>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                    <Button Content="Import" Command="{Binding ImportGameUserSettingsCommand}" Style="{StaticResource ActionButton}" Margin="0"/>
+                                                    <Button Content="Export" Command="{Binding ExportGameUserSettingsCommand}" Style="{StaticResource ActionButton}"/>
+                                                </StackPanel>
+                                            </Grid>
                                             <TextBox Text="{Binding RawGameUserSettingsEditorText, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}" FontFamily="Consolas" MinHeight="360" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
                                         </StackPanel>
                                     </Border>
@@ -1600,7 +1565,17 @@
                                 <TabItem Header="Game.ini">
                                     <Border Style="{StaticResource Panel}">
                                         <StackPanel>
-                                            <TextBlock Text="{Binding GameIniPath}" Style="{StaticResource Label}"/>
+                                            <Grid Margin="0,0,0,6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding GameIniPath}" Style="{StaticResource Label}" VerticalAlignment="Center"/>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                    <Button Content="Import" Command="{Binding ImportGameIniCommand}" Style="{StaticResource ActionButton}" Margin="0"/>
+                                                    <Button Content="Export" Command="{Binding ExportGameIniCommand}" Style="{StaticResource ActionButton}"/>
+                                                </StackPanel>
+                                            </Grid>
                                             <TextBox Text="{Binding RawGameIniEditorText, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}" FontFamily="Consolas" MinHeight="360" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
                                         </StackPanel>
                                     </Border>

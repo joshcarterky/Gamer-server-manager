@@ -22,7 +22,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
     private ArkSurvivalAscendedServerProfile _profile = new();
     private ArkServerConfigurationState? _configurationState;
     private string _searchText = string.Empty;
-    private bool _showAdvanced;
+    private bool _showAdvanced = true;
     private string _selectedTab = "Overview";
     private string _message = "Load or create an ARK ASA server profile to edit live settings.";
     private string _rawGameUserSettings = string.Empty;
@@ -82,6 +82,10 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         OpenLogsFolderCommand = new RelayCommand(_ => OpenFolder(_profile.Paths.LogsPath));
         OpenGameUserSettingsCommand = new RelayCommand(_ => OpenFileInDefaultEditor(_profile.Paths.GameUserSettingsPath));
         OpenGameIniCommand = new RelayCommand(_ => OpenFileInDefaultEditor(_profile.Paths.GameIniPath));
+        ImportGameUserSettingsCommand = new RelayCommand(_ => ImportIni(ref _profile, isGameIni: false));
+        ExportGameUserSettingsCommand = new RelayCommand(_ => ExportIni(RawGameUserSettings, "GameUserSettings.ini"));
+        ImportGameIniCommand = new RelayCommand(_ => ImportIni(ref _profile, isGameIni: true));
+        ExportGameIniCommand = new RelayCommand(_ => ExportIni(RawGameIni, "Game.ini"));
         CreateBackupCommand = new RelayCommand(async _ => await CreateBackupAsync());
         ExportConfigurationCommand = new RelayCommand(_ => ExportConfiguration());
         ManageModsCommand = new RelayCommand(_ => SelectedTab = "Mods");
@@ -118,6 +122,10 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
     public RelayCommand OpenLogsFolderCommand { get; }
     public RelayCommand OpenGameUserSettingsCommand { get; }
     public RelayCommand OpenGameIniCommand { get; }
+    public RelayCommand ImportGameUserSettingsCommand { get; }
+    public RelayCommand ExportGameUserSettingsCommand { get; }
+    public RelayCommand ImportGameIniCommand { get; }
+    public RelayCommand ExportGameIniCommand { get; }
     public RelayCommand CreateBackupCommand { get; }
     public RelayCommand ExportConfigurationCommand { get; }
     public RelayCommand ManageModsCommand { get; }
@@ -1259,6 +1267,50 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         }
     }
 
+    private void ImportIni(ref ArkSurvivalAscendedServerProfile _, bool isGameIni)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = isGameIni ? "Import Game.ini" : "Import GameUserSettings.ini",
+            Filter = "INI files (*.ini)|*.ini|All files (*.*)|*.*",
+            CheckFileExists = true
+        };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            var text = File.ReadAllText(dialog.FileName);
+            if (isGameIni)
+                RawGameIni = text;
+            else
+                RawGameUserSettings = text;
+            Message = $"Imported {Path.GetFileName(dialog.FileName)}. Review changes and Save to apply.";
+        }
+        catch (Exception ex)
+        {
+            Message = $"Import failed: {ex.Message}";
+        }
+    }
+
+    private void ExportIni(string content, string suggestedName)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = $"Export {suggestedName}",
+            Filter = "INI files (*.ini)|*.ini|All files (*.*)|*.*",
+            FileName = suggestedName
+        };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            File.WriteAllText(dialog.FileName, content);
+            Message = $"Exported to {dialog.FileName}";
+        }
+        catch (Exception ex)
+        {
+            Message = $"Export failed: {ex.Message}";
+        }
+    }
+
     private void ExportConfiguration()
     {
         try
@@ -1380,7 +1432,6 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
 
     private static string SectionDescription(string section) => section switch
     {
-        "Server Identity" => "Name, capacity, passwords, and server-browser identity.",
         "Core Rates" => "High-impact pacing multipliers that define the feel of the server.",
         "Breeding Timing" => "Mating, hatch, maturation, cuddle, and imprint timing.",
         "Network Endpoints" => "Ports, RCON, binding, and connectivity-related settings.",
@@ -1558,8 +1609,43 @@ public sealed class ArkSettingDefinitionViewModel : BaseViewModel
     public bool IsBoolean => DataType == ArkSettingDataType.Boolean;
     public bool IsPassword => DataType == ArkSettingDataType.Password;
     public bool IsNumeric => DataType is ArkSettingDataType.Integer or ArkSettingDataType.Decimal;
-    public bool IsText => !IsBoolean && !IsPassword && !IsComplex;
+    public bool IsMapSetting => Key.Equals("MapName", StringComparison.OrdinalIgnoreCase) && FileLocation == ArkSettingFileLocation.LaunchArguments;
+    public bool IsText => !IsBoolean && !IsPassword && !IsComplex && !IsMapSetting;
     public bool IsComplex => DataType is ArkSettingDataType.RepeatedLine or ArkSettingDataType.StringList;
+
+    private static readonly IReadOnlyList<ArkAsaKnownMap> _officialMapOptions =
+        ArkAsaClusterManager.KnownMaps.Where(m => m.InternalName != "Custom").ToList();
+    private static readonly ArkAsaKnownMap _customMapOption = new("Custom Map / Mod", "Custom", "Custom");
+    private static readonly IReadOnlyList<ArkAsaKnownMap> _allMapChoices =
+        _officialMapOptions.Append(_customMapOption).ToList();
+
+    public IReadOnlyList<ArkAsaKnownMap> MapChoices => IsMapSetting ? _allMapChoices : Array.Empty<ArkAsaKnownMap>();
+    public bool ShowCustomMapInput => IsMapSetting &&
+        !_officialMapOptions.Any(m => m.InternalName.Equals(Value, StringComparison.OrdinalIgnoreCase));
+
+    public ArkAsaKnownMap? SelectedMapChoice
+    {
+        get
+        {
+            if (!IsMapSetting) return null;
+            return _officialMapOptions.FirstOrDefault(m => m.InternalName.Equals(Value, StringComparison.OrdinalIgnoreCase))
+                ?? _customMapOption;
+        }
+        set
+        {
+            if (value == null) return;
+            if (value == _customMapOption)
+            {
+                if (!ShowCustomMapInput) Value = string.Empty;
+            }
+            else
+            {
+                Value = value.InternalName;
+            }
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowCustomMapInput));
+        }
+    }
     public bool IsModified => !string.Equals(Value, SavedValue, StringComparison.Ordinal);
     public bool IsCustomized => !string.Equals(Value, DefaultValue, StringComparison.Ordinal);
     public bool HasWarning => !string.IsNullOrWhiteSpace(WarningText);
@@ -1606,6 +1692,8 @@ public sealed class ArkSettingDefinitionViewModel : BaseViewModel
                 OnPropertyChanged(nameof(IsCustomized));
                 OnPropertyChanged(nameof(MaskedDisplayValue));
                 OnPropertyChanged(nameof(SerializedValue));
+                OnPropertyChanged(nameof(SelectedMapChoice));
+                OnPropertyChanged(nameof(ShowCustomMapInput));
                 _changed();
             }
         }

@@ -98,8 +98,21 @@ namespace GameServerManager.App.Views
             WindowState = WindowState == WindowState.Maximized
                 ? WindowState.Normal
                 : WindowState.Maximized;
+        }
 
-            MaximizeButton.Content = WindowState == WindowState.Maximized ? "[]]" : "[ ]";
+        protected override void OnStateChanged(EventArgs e)
+        {
+            base.OnStateChanged(e);
+            if (WindowState == WindowState.Maximized)
+            {
+                ShellFrame.Margin = new Thickness(6);
+                MaximizeButton.Content = "[]]";
+            }
+            else
+            {
+                ShellFrame.Margin = new Thickness(0);
+                MaximizeButton.Content = "[ ]";
+            }
         }
 
         private void NavigateTo(string pageName, Button activeButton)

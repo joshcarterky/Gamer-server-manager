@@ -26,7 +26,7 @@ Write-Host "Deploying to $testDir ..." -ForegroundColor Cyan
 if (-not (Test-Path $testDir)) {
     New-Item -ItemType Directory -Force -Path $testDir | Out-Null
 }
-robocopy $buildOut $testDir /MIR /NFL /NDL /NJH /NJS | Out-Null
+robocopy $buildOut $testDir /MIR /NFL /NDL /NJH /NJS /XD Data /XF portable.flag | Out-Null
 if ($LASTEXITCODE -le 7) { $global:LASTEXITCODE = 0 }
 
 # portable.flag keeps all data in the test folder itself (no AppData pollution)
