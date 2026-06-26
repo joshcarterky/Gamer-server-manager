@@ -267,15 +267,11 @@
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <!-- Indentation -->
-                                    <Rectangle Width="{Binding Level, RelativeSource={RelativeSource AncestorType=TreeViewItem}, Converter={x:Static SystemParameters.HorizontalScrollBarHeightKey}}"
-                                               Grid.Column="0"/>
                                     <!-- Expander toggle -->
                                     <ToggleButton x:Name="Expander"
-                                                  Grid.Column="1"
+                                                  Grid.Column="0"
                                                   Width="16" Height="16"
                                                   Margin="2,0,2,0"
                                                   IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}"
@@ -304,7 +300,7 @@
                                     </ToggleButton>
                                     <!-- Item header -->
                                     <ContentPresenter x:Name="PART_Header"
-                                                      Grid.Column="2"
+                                                      Grid.Column="1"
                                                       ContentSource="Header"
                                                       VerticalAlignment="Center"/>
                                 </Grid>
