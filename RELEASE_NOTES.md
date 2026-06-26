@@ -1,5 +1,22 @@
 # Release Notes
 
+## v3.4.3
+
+### Added
+- **7 Days to Die** — upgraded the minimal provider stub to a full first-class integration:
+  - 6 ports declared: Game (TCP+UDP 26900), UDP 26901–26903, optional Web (TCP 8080) and Telnet (TCP 8081)
+  - 33 settings definitions across 9 categories: General, Networking, Player Slots, Security, Web Control Panel, Telnet, Data & Storage, World, Sandbox (V3), Installation
+  - Correct headless launch flags: `-logFile`, `-quit`, `-batchmode`, `-nographics`, `-dedicated`, `-configfile=`, `-UserDataFolder=` — all with absolute quoted paths; `UserDataFolder` defaults to `<install>/UserData` so per-server data is isolated from AppData
+  - `SevenDaysToDieSteamCmdService` — builds SteamCMD arguments (app 294420) with anonymous login, branch selection (`-beta "branch"`), validate flag, and credential masking for display previews
+  - `ServerConfigXmlDocument` — `serverconfig.xml` parser/writer that preserves unknown `<property>` elements, with atomic writes (temp → validate → rename) and `.bak` backups
+  - `SevenDaysToDieConfigService` — maps `ServerProfile` ↔ `serverconfig.xml`; never writes V2 legacy gameplay keys back when a V3 `SandboxCode` is present; `EnsureConfigExistsAsync` creates a minimal valid config without overwriting an existing one
+  - `SevenDaysToDieLaunchBuilder` — display-safe launch preview builder
+  - `SevenDaysToDieValidator` — catches crossplay/EAC conflicts, slot-count violations, V2-without-SandboxCode migration warnings, and invalid world-gen sizes
+  - `SandboxCodeHelpers.MaskSensitiveValues()` — redacts passwords from XML before logging or export
+  - Five new provider tests covering provider metadata, SteamCMD arg construction, XML config round-trip, launch builder output, and validator rules
+
+---
+
 ## v3.4.2
 
 ### Fixed

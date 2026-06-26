@@ -5,6 +5,7 @@ using GameServerManager.Services.ArkSurvivalAscended;
 using GameServerManager.Services.Configuration;
 using GameServerManager.Services.Diagnostics;
 using GameServerManager.Services.Repositories;
+using GameServerManager.Services.SevenDaysToDie;
 using GameServerManager.Services.Updates;
 using System.Xml.Linq;
 
@@ -94,6 +95,11 @@ TestArkPasswordRedaction();
 TestArkModOrdering();
 await TestArkMigrationDetectionAsync();
 await TestArkMinimalIniCreationAsync();
+Test7DaysToDieProvider();
+Test7DaysToDieSteamCmdArgs();
+await Test7DaysToDieConfigXmlAsync();
+Test7DaysToDieLaunchBuilder();
+Test7DaysToDieValidator();
 
 Console.WriteLine("Provider and server data tests passed.");
 
@@ -1068,6 +1074,303 @@ static async Task TestArkMinimalIniCreationAsync()
     {
         DeleteTempRoot(tempRoot);
     }
+}
+
+// ── 7 Days to Die tests ───────────────────────────────────────────────────────
+
+static void Test7DaysToDieProvider()
+{
+    var registry = GameProviderRegistry.CreateDefault();
+    Assert(registry.TryGetProvider("seven_days_to_die", out var provider), "7 Days to Die provider must be registered.");
+    Assert(provider.SteamAppId == 294420, "7 Days to Die dedicated server Steam App ID must be 294420.");
+    Assert(provider.ExecutableRelativePath == "7DaysToDieServer.exe", "Executable path mismatch.");
+    Assert(provider.DefaultPorts.Count >= 4, "Provider must declare at least 4 ports (base + 3 UDP).");
+    Assert(provider.DefaultPorts.Any(p => p.Name == "Game" && p.Protocol == PortProtocol.Both), "Game port must be TCP+UDP.");
+    Assert(provider.SupportedFeatures.HasFlag(GameServerFeatures.SteamCmdInstall), "Must declare SteamCmdInstall.");
+    Assert(provider.SupportedFeatures.HasFlag(GameServerFeatures.Mods), "Must declare Mods.");
+    Assert(provider.SettingsDefinitions.Count > 0, "Provider must expose settings definitions.");
+    Assert(provider.SettingsDefinitions.Any(s => s.SettingKey == "ServerName"), "Settings must include ServerName.");
+    Assert(provider.SettingsDefinitions.Any(s => s.SettingKey == "SandboxCode"), "Settings must include SandboxCode for V3.");
+    Assert(provider.SettingsDefinitions.Any(s => s.SettingKey == "EACEnabled"), "Settings must include EACEnabled.");
+    Assert(provider.SettingsDefinitions.Any(s => s.SettingKey == "GameWorld"), "Settings must include GameWorld.");
+    Assert(provider.SettingsDefinitions.Any(s => s.SettingKey == "ServerAllowCrossplay"), "Settings must include ServerAllowCrossplay.");
+
+    var profile = new ServerProfile
+    {
+        Id = "7dtd-test",
+        GameId = "seven_days_to_die",
+        ProfileName = "Test",
+        ServerName = "7DTD Test",
+        InstallPath = @"C:\Servers\7dtd",
+        MaxPlayers = 8,
+        Ports = provider.DefaultPorts.Select(p => new ServerPort
+        {
+            Name = p.Name, Port = p.Port, DefaultPort = p.DefaultPort,
+            Protocol = p.Protocol, Description = p.Description, IsRequired = p.IsRequired
+        }).ToList()
+    };
+
+    var command = provider.BuildStartCommand(profile);
+    Assert(command.IsValid, "Launch command must be valid.");
+    Assert(command.Arguments.Contains("-batchmode", StringComparison.Ordinal), "Launch must include -batchmode.");
+    Assert(command.Arguments.Contains("-nographics", StringComparison.Ordinal), "Launch must include -nographics.");
+    Assert(command.Arguments.Contains("-dedicated", StringComparison.Ordinal), "Launch must include -dedicated.");
+    Assert(command.Arguments.Contains("-configfile=", StringComparison.Ordinal), "Launch must include -configfile=.");
+    Assert(command.Arguments.Contains("-UserDataFolder=", StringComparison.Ordinal), "Launch must include -UserDataFolder=.");
+    Assert(command.Arguments.Contains("-logFile", StringComparison.Ordinal), "Launch must include -logFile.");
+
+    // UserDataFolder must be under the install path (isolated per-instance, not AppData).
+    Assert(command.Arguments.Contains(@"C:\Servers\7dtd", StringComparison.OrdinalIgnoreCase), "UserDataFolder must be under install path.");
+}
+
+static void Test7DaysToDieSteamCmdArgs()
+{
+    var svc = new SevenDaysToDieSteamCmdService();
+
+    // Anonymous, stable branch
+    var args = svc.BuildArguments(@"C:\Servers\7dtd");
+    Assert(args.Contains("+force_install_dir", StringComparison.Ordinal), "SteamCMD args must include +force_install_dir.");
+    Assert(args.Contains("+login anonymous", StringComparison.Ordinal), "Default login must be anonymous.");
+    Assert(args.Contains($"+app_update {SevenDaysToDieSteamCmdService.AppId}", StringComparison.Ordinal), "Must reference AppId 294420.");
+    Assert(args.Contains("+quit", StringComparison.Ordinal), "Must end with +quit.");
+    Assert(!args.Contains("-beta", StringComparison.Ordinal), "Stable branch must not emit -beta.");
+
+    // Experimental branch
+    var expArgs = svc.BuildArguments(@"C:\Servers\7dtd", branch: "latest_experimental");
+    Assert(expArgs.Contains("-beta \"latest_experimental\"", StringComparison.Ordinal), "Experimental branch must emit -beta.");
+
+    // Validate flag
+    var validateArgs = svc.BuildArguments(@"C:\Servers\7dtd", validate: true);
+    Assert(validateArgs.Contains("validate", StringComparison.Ordinal), "Validate must include 'validate' keyword.");
+
+    // Display args must never expose credentials
+    var displayArgs = svc.BuildArgumentsForDisplay(@"C:\Servers\7dtd", hasCredentials: true);
+    Assert(!displayArgs.Contains("password", StringComparison.OrdinalIgnoreCase), "Display args must not expose passwords.");
+    Assert(displayArgs.Contains("****", StringComparison.Ordinal), "Display args must mask credentials.");
+
+    // Stable/public branch synonyms must not emit -beta
+    var publicArgs = svc.BuildArguments(@"C:\Servers\7dtd", branch: "stable");
+    Assert(!publicArgs.Contains("-beta", StringComparison.Ordinal), "'stable' branch must not emit -beta.");
+    var publicArgs2 = svc.BuildArguments(@"C:\Servers\7dtd", branch: "public");
+    Assert(!publicArgs2.Contains("-beta", StringComparison.Ordinal), "'public' branch must not emit -beta.");
+}
+
+static async Task Test7DaysToDieConfigXmlAsync()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var configPath = Path.Combine(tempRoot, "serverconfig.xml");
+
+        // Create a minimal config and verify it parses
+        await SevenDaysToDieConfigService.EnsureConfigExistsAsync(configPath, "Round Trip Server");
+        Assert(File.Exists(configPath), "EnsureConfigExistsAsync must create serverconfig.xml.");
+
+        var doc = await ServerConfigXmlDocument.LoadAsync(configPath);
+        Assert(doc.GetValue("ServerName") == "Round Trip Server", "ServerName must be written and read back.");
+        Assert(doc.GetValue("EACEnabled") != null, "EACEnabled must be present in the minimal config.");
+
+        // Preserve an unknown property
+        doc.SetValue("UnknownFutureProperty", "futuristic-value");
+        await doc.SaveAtomicAsync(configPath);
+
+        var reloaded = await ServerConfigXmlDocument.LoadAsync(configPath);
+        Assert(reloaded.GetValue("UnknownFutureProperty") == "futuristic-value", "Unknown properties must survive save/reload.");
+        Assert(reloaded.GetValue("ServerName") == "Round Trip Server", "Known properties must survive save/reload.");
+
+        // EnsureConfigExistsAsync must not overwrite an existing file
+        await SevenDaysToDieConfigService.EnsureConfigExistsAsync(configPath, "Different Name");
+        var notOverwritten = await ServerConfigXmlDocument.LoadAsync(configPath);
+        Assert(notOverwritten.GetValue("ServerName") == "Round Trip Server", "EnsureConfigExistsAsync must not overwrite existing config.");
+
+        // Atomic save: a malformed intermediate state must never replace the original
+        var originalContent = await File.ReadAllTextAsync(configPath);
+        Assert(!string.IsNullOrWhiteSpace(originalContent), "Saved config must not be empty.");
+
+        // Profile round-trip through SevenDaysToDieConfigService
+        var profile = new ServerProfile
+        {
+            Id = "7dtd-cfg-test",
+            GameId = "seven_days_to_die",
+            ServerName = "Config Test Server",
+            Password = "join-secret",
+            MaxPlayers = 16,
+            Ports = new List<ServerPort> { new() { Name = "Game", Port = 26910 } }
+        };
+        profile.Settings["EACEnabled"] = "false";
+        profile.Settings["GameWorld"] = "RWG";
+        profile.Settings["SandboxCode"] = "AAAJABJACJADJARFBNC";
+
+        var svc = new SevenDaysToDieConfigService();
+        var profileConfigPath = Path.Combine(tempRoot, "profile-serverconfig.xml");
+        await SevenDaysToDieConfigService.EnsureConfigExistsAsync(profileConfigPath);
+        await svc.SaveAsync(profile, profileConfigPath);
+
+        var savedDoc = await ServerConfigXmlDocument.LoadAsync(profileConfigPath);
+        Assert(savedDoc.GetValue("ServerName") == "Config Test Server", "ServerName must be saved from profile.");
+        Assert(savedDoc.GetValue("ServerPort") == "26910", "ServerPort must be saved from Ports list.");
+        Assert(savedDoc.GetValue("ServerMaxPlayerCount") == "16", "ServerMaxPlayerCount must be saved.");
+        Assert(savedDoc.GetValue("GameWorld") == "RWG", "GameWorld must be saved from Settings.");
+        Assert(savedDoc.GetValue("SandboxCode") == "AAAJABJACJADJARFBNC", "SandboxCode must be saved.");
+        Assert(savedDoc.GetValue("ServerPassword") == "join-secret", "ServerPassword must be saved from profile.Password.");
+
+        // Load from XML back into a profile
+        var loadedProfile = new ServerProfile
+        {
+            Id = "7dtd-load-test",
+            GameId = "seven_days_to_die",
+            InstallPath = tempRoot,
+            Ports = new List<ServerPort> { new() { Name = "Game", Port = 26900 } }
+        };
+        await svc.LoadAsync(loadedProfile, profileConfigPath);
+        Assert(loadedProfile.ServerName == "Config Test Server", "LoadAsync must populate profile.ServerName.");
+        Assert(loadedProfile.MaxPlayers == 16, "LoadAsync must populate profile.MaxPlayers.");
+        Assert(loadedProfile.Password == "join-secret", "LoadAsync must populate profile.Password.");
+        Assert(loadedProfile.Settings.ContainsKey("SandboxCode"), "LoadAsync must load SandboxCode into Settings.");
+
+        // V2 legacy keys must NOT be written back when SandboxCode is set
+        var v3Profile = new ServerProfile
+        {
+            Id = "7dtd-v3-test",
+            GameId = "seven_days_to_die",
+            ServerName = "V3 Server",
+            Ports = new List<ServerPort> { new() { Name = "Game", Port = 26900 } }
+        };
+        v3Profile.Settings["SandboxCode"] = "AAAJABJACJADJARFBNC";
+        v3Profile.Settings["GameDifficulty"] = "2";  // V2 legacy key
+        v3Profile.Settings["ZombieMove"] = "1";      // V2 legacy key
+
+        var v3ConfigPath = Path.Combine(tempRoot, "v3-serverconfig.xml");
+        await SevenDaysToDieConfigService.EnsureConfigExistsAsync(v3ConfigPath);
+        await svc.SaveAsync(v3Profile, v3ConfigPath);
+        var v3Doc = await ServerConfigXmlDocument.LoadAsync(v3ConfigPath);
+        Assert(v3Doc.GetValue("GameDifficulty") == null, "V2 GameDifficulty must not be written to a V3 config.");
+        Assert(v3Doc.GetValue("ZombieMove") == null, "V2 ZombieMove must not be written to a V3 config.");
+        Assert(v3Doc.GetValue("SandboxCode") == "AAAJABJACJADJARFBNC", "SandboxCode must be present in V3 config.");
+
+        // Sensitive value masking
+        var xmlWithSecrets = "<ServerSettings><property name=\"ServerPassword\" value=\"top-secret\" /><property name=\"ServerName\" value=\"Public\" /></ServerSettings>";
+        var masked = SandboxCodeHelpers.MaskSensitiveValues(xmlWithSecrets);
+        Assert(!masked.Contains("top-secret", StringComparison.Ordinal), "Masked XML must not contain secret password.");
+        Assert(masked.Contains("********", StringComparison.Ordinal), "Masked XML must replace password with ********.");
+        Assert(masked.Contains("Public", StringComparison.Ordinal), "Masked XML must preserve non-sensitive values.");
+
+        // Backup created on save
+        var backupCount = Directory.EnumerateFiles(tempRoot, "*.bak").Count();
+        Assert(backupCount > 0, "SaveAtomicAsync must create a .bak backup file.");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
+}
+
+static void Test7DaysToDieLaunchBuilder()
+{
+    var profile = new ServerProfile
+    {
+        Id = "7dtd-launch-test",
+        GameId = "seven_days_to_die",
+        ServerName = "Launch Test",
+        InstallPath = @"C:\Servers\7dtd",
+        Ports = new List<ServerPort> { new() { Name = "Game", Port = 26900 } }
+    };
+
+    var preview = new SevenDaysToDieLaunchBuilder().Build(profile);
+    Assert(preview.Arguments.Contains("-batchmode", StringComparison.Ordinal), "Launch builder must include -batchmode.");
+    Assert(preview.Arguments.Contains("-nographics", StringComparison.Ordinal), "Launch builder must include -nographics.");
+    Assert(preview.Arguments.Contains("-dedicated", StringComparison.Ordinal), "Launch builder must include -dedicated.");
+    Assert(preview.Arguments.Contains("-configfile=", StringComparison.Ordinal), "Launch builder must include -configfile=.");
+    Assert(preview.Arguments.Contains("-UserDataFolder=", StringComparison.Ordinal), "Launch builder must include -UserDataFolder=.");
+    Assert(preview.CommandLine.Contains("7DaysToDieServer.exe", StringComparison.OrdinalIgnoreCase), "Command line must reference server executable.");
+    Assert(preview.WorkingDirectory == @"C:\Servers\7dtd", "Working directory must be the install path.");
+}
+
+static void Test7DaysToDieValidator()
+{
+    var registry = GameProviderRegistry.CreateDefault();
+    registry.TryGetProvider("seven_days_to_die", out var provider);
+    var validator = new SevenDaysToDieValidator();
+
+    // Valid V3 profile
+    var validProfile = new ServerProfile
+    {
+        Id = "7dtd-valid",
+        GameId = "seven_days_to_die",
+        ServerName = "Valid Server",
+        InstallPath = @"C:\Servers\7dtd",
+        MaxPlayers = 8,
+        Ports = provider!.DefaultPorts.Select(p => new ServerPort
+        {
+            Name = p.Name, Port = p.Port, DefaultPort = p.DefaultPort,
+            Protocol = p.Protocol, IsRequired = p.IsRequired
+        }).ToList()
+    };
+    validProfile.Settings["SandboxCode"] = "AAAJABJACJADJARFBNC";
+    var result = validator.Validate(validProfile);
+    Assert(result.IsValid, "Valid V3 profile must pass validation.");
+
+    // Crossplay requires EAC
+    var crossplayNoEac = new ServerProfile
+    {
+        Id = "7dtd-crossplay",
+        GameId = "seven_days_to_die",
+        ServerName = "Crossplay",
+        InstallPath = @"C:\Servers\7dtd",
+        MaxPlayers = 8,
+        Ports = provider.DefaultPorts.Select(p => new ServerPort
+        {
+            Name = p.Name, Port = p.Port, DefaultPort = p.DefaultPort,
+            Protocol = p.Protocol, IsRequired = p.IsRequired
+        }).ToList()
+    };
+    crossplayNoEac.Settings["ServerAllowCrossplay"] = "true";
+    crossplayNoEac.Settings["EACEnabled"] = "false";
+    var crossplayResult = validator.Validate(crossplayNoEac);
+    Assert(!crossplayResult.IsValid, "Crossplay without EAC must fail validation.");
+    Assert(crossplayResult.Errors.Any(e => e.Contains("EAC", StringComparison.OrdinalIgnoreCase)), "Error must mention EAC.");
+
+    // Crossplay player count warning
+    var crossplayTooMany = new ServerProfile
+    {
+        Id = "7dtd-crossplay-slots",
+        GameId = "seven_days_to_die",
+        ServerName = "Too Many",
+        InstallPath = @"C:\Servers\7dtd",
+        MaxPlayers = 20,
+        Ports = provider.DefaultPorts.Select(p => new ServerPort
+        {
+            Name = p.Name, Port = p.Port, DefaultPort = p.DefaultPort,
+            Protocol = p.Protocol, IsRequired = p.IsRequired
+        }).ToList()
+    };
+    crossplayTooMany.Settings["ServerAllowCrossplay"] = "true";
+    crossplayTooMany.Settings["EACEnabled"] = "true";
+    var slotResult = validator.Validate(crossplayTooMany);
+    Assert(slotResult.HasWarnings, "Crossplay with >8 players must produce a warning.");
+    Assert(slotResult.Warnings.Any(w => w.Contains("8", StringComparison.Ordinal)), "Warning must mention the 8-player limit.");
+
+    // Missing install path
+    var noPath = new ServerProfile { Id = "7dtd-nopath", GameId = "seven_days_to_die", ServerName = "No Path" };
+    Assert(!validator.Validate(noPath).IsValid, "Missing InstallPath must fail validation.");
+
+    // V2 settings without SandboxCode should warn
+    var v2Profile = new ServerProfile
+    {
+        Id = "7dtd-v2",
+        GameId = "seven_days_to_die",
+        ServerName = "V2 Server",
+        InstallPath = @"C:\Servers\7dtd",
+        MaxPlayers = 8,
+        Ports = provider.DefaultPorts.Select(p => new ServerPort
+        {
+            Name = p.Name, Port = p.Port, DefaultPort = p.DefaultPort,
+            Protocol = p.Protocol, IsRequired = p.IsRequired
+        }).ToList()
+    };
+    v2Profile.Settings["GameDifficulty"] = "2";
+    var v2Result = validator.Validate(v2Profile);
+    Assert(v2Result.HasWarnings, "V2 settings without SandboxCode must produce a migration warning.");
 }
 
 static string CreateTempRoot()
