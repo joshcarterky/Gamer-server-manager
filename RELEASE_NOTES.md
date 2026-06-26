@@ -1,5 +1,12 @@
 # Release Notes
 
+## v4.0.2
+
+### Fixed
+- File Manager tab caused a cascade of error dialogs on open. A broken converter binding on the folder tree's indent rectangle used a `ResourceKey` instead of an `IValueConverter`, throwing on every tree node. Removed the redundant rectangle — the `ItemsPresenter` margin already handles indentation.
+
+---
+
 ## v4.0.1
 
 ### Fixed
