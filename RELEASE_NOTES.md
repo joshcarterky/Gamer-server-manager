@@ -1,5 +1,12 @@
 # Release Notes
 
+## v4.0.1
+
+### Fixed
+- Re-release to ensure all users receive the full v4.0.0 feature set (File Manager, Console, Scheduler, Monitoring, Deploy, 7 Days to Die integration). A CI race condition caused some installs to receive an incomplete build.
+
+---
+
 ## v4.0.0
 
 ### Added
