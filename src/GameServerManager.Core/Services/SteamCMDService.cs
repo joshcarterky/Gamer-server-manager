@@ -18,7 +18,6 @@ namespace GameServerManager.Core.Services
         private string _installedDirectory;
         private string _logDirectory;
         private bool _isInstalled;
-        private volatile bool _isRunning;
 
         public event EventHandler<string>? StatusChanged;
         public event EventHandler<string>? LogOutput;
