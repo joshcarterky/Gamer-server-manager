@@ -12,6 +12,173 @@ This project follows semantic versioning.
 
 ### Fixed
 
+## [3.4.4] - 2026-06-26
+
+### Added
+
+- **7 Days to Die dedicated server support** — full first-class integration for 7 Days to Die (Steam App ID 294420) with 6 ports, 33 settings across 9 categories, headless launch flags, SteamCMD argument builder, `serverconfig.xml` parser/writer, V2→V3 migration protection, crossplay/EAC validation, branch selection, and five provider tests.
+
+### Fixed
+
+- Removed a stale test assertion for `GroupName="ArkMode"` no longer present in the ARK ASA settings XAML after the v3.4.0 redesign.
+
+## [3.4.3] - 2026-06-26
+
+### Added
+
+- Initial 7 Days to Die provider integration (expanded in v3.4.4).
+
+## [3.4.2] - 2026-06-18
+
+### Fixed
+
+- Maximizing the window cut off content on all four edges; `Shell` now applies a 6 px margin to `ShellFrame` when maximized to compensate for `WindowChrome.ResizeBorderThickness="6"`.
+
+## [3.4.1] - 2026-06-18
+
+### Fixed
+
+- ARK ASA Max Players and Session Name were categorised under `"Server Identity"` which matched no tab, making them invisible. Both are now under `Admin / Passwords`.
+
+## [3.4.0] - 2026-06-18
+
+### Fixed
+
+- ARK ASA uses `-WinLiveMaxPlayers=<n>` not the legacy URL `MaxPlayers=` query parameter; corrected in both `ArkSurvivalAscendedProvider.BuildStartCommand` and `ArkAsaLaunchBuilder.Build`.
+- `ArkAsaConfigService.SaveAsync` now skips `MaxPlayers` and `ActiveMods` (launch-only keys) and actively removes any old `MaxPlayers` entry already in the INI.
+- `ArkAsaConfigurationStateService.LoadAsync` detects obsolete keys and surfaces `MigrationResult` warnings via `HasMigrationWarnings` / `MigrationWarningText`.
+- `IniDocument.RemoveKey` added to remove all occurrences of a key from a section.
+
+### Added
+
+- `OpenGameUserSettingsCommand` and `OpenGameIniCommand` on `ArkAsaSettingsViewModel` to open INI files in the system default editor.
+- Twelve new ARK ASA targeted tests covering launch flag correctness, INI exclusions, round-trip, comment preservation, path isolation, culture formatting, password redaction, mod ordering, migration detection, and minimal INI creation.
+
+## [3.3.9] - 2026-06-18
+
+### Added
+
+- Staged updater downloads, package verification, pending update metadata JSON, and technical failure details in Settings > Updates.
+- ARK ASA settings page grouped navigation, server overview cards, section cards, boolean editors, and validation indicators.
+
+### Fixed
+
+- Updater flow can no longer stop after a failed download without a usable install state.
+- GitHub asset selection rejects source archives, checksum files, debug packages, non-Windows assets, and incompatible architectures.
+
+## [3.3.8] - 2026-06-17
+
+### Changed
+
+- Full ARK ASA settings UI redesign: dark-navy dashboard with top header bar (icon, title, server chip, search, mode toggle, action buttons), left sidebar with grouped navigation and live status card, Overview cards (Quick Status, Configuration Health, Ports), Quick Configuration card, unsaved-changes banner.
+
+## [3.3.7] - 2026-06-17
+
+### Fixed
+
+- Configuration Health warning count no longer includes every settings with a danger label on a fresh profile; warnings now only count when the user has changed the setting from its default.
+
+## [3.3.6] - 2026-06-17
+
+### Removed
+
+- Install / Update nav item and tab from the ARK ASA settings sidebar. Install and update are available from the server tile.
+
+## [3.3.5] - 2026-06-17
+
+### Fixed
+
+- SteamCMD install/update log now tails SteamCMD's own `logs/content_log.txt` in real time, capturing all progress, download percentages, and errors that were previously unreadable because SteamCMD writes them via the Windows Console API rather than stdout/stderr.
+
+## [3.3.4] - 2026-06-17
+
+### Fixed
+
+- SteamCMD uses carriage returns (`\r`) for in-place progress lines; the reader now handles both `\r` and `\n` so download percentages and update state appear in the UI.
+
+## [3.3.3] - 2026-06-17
+
+### Added
+
+- Inno Setup "Choose Install Location" page in the installer.
+
+### Fixed
+
+- SteamCMD download progress, update percentages, and status messages now stream live into the install panel via stderr capture.
+
+## [3.3.2] - 2026-06-17
+
+### Fixed
+
+- Removed the redundant server context header (ARK badge, name, status pills, action buttons) pinned at the top of the ARK ASA settings content area.
+
+## [3.3.1] - 2026-06-17
+
+### Changed
+
+- Server tile action bar replaced white overflow menus with a permanent full-width button bar: Edit Profile, Console Log, Backup Now, Open Folder, Details, Settings, More Options, Delete Server.
+- Start/Stop dropdown and Install/Update stacked vertically top-right.
+- Delete Server is red-accented and separated from management actions.
+
+## [3.3.0] - 2026-06-17
+
+### Added
+
+- Install / Update overlay panel opened from the server card `⋯` menu.
+- SteamCMD integration: auto-installs SteamCMD on first use, runs `+app_update {appId} [validate] +quit`, captures stderr, checks exit code, kills process tree on cancel.
+- Live SteamCMD output streamed into a scrolling console area; indeterminate progress bar while running.
+- Validate files checkbox and Restart after update checkbox.
+- Install result panel with success/failure colour coding and Open Log button.
+- Running-server guard: prompts to stop before update.
+- Per-server operation lock preventing concurrent installs.
+- `ServerInstallService` coordinating validation, SteamCMD arguments, progress reporting, and log writing.
+- Install validation tests for empty-path rejection, feature-flag checks, and ARK ASA App ID correctness.
+
+### Fixed
+
+- `SteamCMDService` now detects `steamcmd.exe` on disk at construction so `IsInstalled` is accurate on startup.
+- `SteamCMDService.InstallServerAsync` / `UpdateServerAsync` now emit `+app_update {AppId}` so SteamCMD actually downloads files.
+- `CanStart` no longer enables Start while the server is in Starting, Updating, Restarting, or Stopping state.
+
+## [3.2.1] - 2026-06-17
+
+### Changed
+
+- Servers page redesigned with card layout: summary stat cards, search/filter toolbar, per-server cards with game identity tiles, colour-coded status badges, Players/CPU/RAM columns, expandable details drawer.
+- Action hierarchy: primary Start/Console button, icon buttons for Settings and Files, `▾` power dropdown, `⋯` overflow menu with Delete protected by confirmation.
+- ARK cluster badge shown when clustering is enabled.
+- Game identity tiles with coloured two-letter initials on game-specific tinted backgrounds.
+
+### Fixed
+
+- Power (`▾`) and more (`⋯`) dropdown context menus now open anchored below their button instead of appearing at the wrong screen position.
+
+## [3.2.0] - 2026-06-17
+
+### Added
+
+- Per-map cluster settings on the Cluster tab: Cluster ID, Cluster Directory Override, Enable Cluster.
+- Live cluster status pill (Not configured / Invalid / Needs restart / Ready).
+- Generate Cluster ID button producing a unique `asa-<uuid>` identifier.
+- Browse / Create / Open folder commands for the cluster transfer directory.
+- Cluster launch preview showing `-clusterid=` and `-ClusterDirOverride=` flags.
+- Cluster transfer presets: Open Cluster, Character Only, No Downloads In, One Way Out, Locked Map.
+- Per-map session name and alt-save-directory override on the Add Map form.
+- Member-level port and name validation inline on map cards.
+- `NoTransferFromFiltering` defaulting to enabled for new clusters.
+
+### Changed
+
+- Cluster settings keys migrated to `Cluster.Enabled`, `Cluster.Id`, `Cluster.DirectoryOverride`; old keys read as fallback.
+- Missing Cluster ID or Directory Override when clustering is enabled is now an error, not a warning.
+- `AllowTributeDownloads` resolution checks `noTributeDownloads` / `NoTributeDownloads` to prevent conflicting flags.
+- Cluster Directory Override path validated for illegal characters before save.
+
+### Fixed
+
+- Cluster tab DataContext was bound to the nested `Cluster` sub-model instead of the page ViewModel, causing binding failures for cluster commands and status properties.
+- `-clusterid=` and `-ClusterDirOverride=` flags were appended to the launch command even when clustering was disabled.
+
 ## [3.1.1] - 2026-06-17
 
 ### Added
