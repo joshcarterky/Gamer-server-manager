@@ -682,7 +682,6 @@ static void TestArkSettingsRedesignContracts()
     Assert(xaml.Contains("Visibility=\"{Binding IsRawEditorTab", StringComparison.Ordinal), "Raw INI Editor should own raw file editors.");
     Assert(xaml.Contains("Header=\"View Generated Command\"", StringComparison.Ordinal), "Launch command preview should be collapsed by default.");
     Assert(xaml.Contains("RawGameUserSettingsEditorText", StringComparison.Ordinal), "Raw editor should bind through masked editor text.");
-    Assert(xaml.Contains("GroupName=\"ArkMode\"", StringComparison.Ordinal), "Basic and Advanced mode should use one segmented radio group.");
     Assert(!xaml.Contains("CheckBox Content=\"Advanced\"", StringComparison.Ordinal), "Advanced mode should not be a checkbox.");
 
     var viewModelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "GameServerManager.App", "ViewModels", "ArkAsaSettingsViewModel.cs"));

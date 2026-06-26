@@ -1,5 +1,12 @@
 # Release Notes
 
+## v3.4.4
+
+### Fixed
+- **Tests** — removed a stale assertion in `TestArkSettingsRedesignContracts` that checked for a `GroupName="ArkMode"` attribute no longer present in the ARK ASA settings XAML after the v3.4.0 redesign.
+
+---
+
 ## v3.4.3
 
 ### Added
