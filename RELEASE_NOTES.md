@@ -1,5 +1,24 @@
 # Release Notes
 
+## v4.0.0
+
+### Added
+- **7 Days to Die dedicated server support** — full first-class integration for 7 Days to Die (Steam App ID 294420). This is the feature that marks the 4.0 baseline.
+  - 6 ports: Game (TCP+UDP 26900), UDP 26901–26903, optional Web (TCP 8080), Telnet (TCP 8081)
+  - 33 settings across 9 categories: General, Networking, Player Slots, Security, Web Control Panel, Telnet, Data & Storage, World, Sandbox (V3), Installation
+  - Headless launch flags with absolute quoted paths: `-logFile`, `-quit`, `-batchmode`, `-nographics`, `-dedicated`, `-configfile=`, `-UserDataFolder=`; `UserDataFolder` defaults to `<install>/UserData` for per-server isolation
+  - SteamCMD argument builder with anonymous login, branch selection (`stable`, `latest_experimental`, `latest_experimental_fallback`, custom), validate flag, and credential masking
+  - `serverconfig.xml` parser/writer preserving unknown `<property>` elements, atomic writes (temp → validate → rename), and `.bak` backups
+  - V2→V3 migration protection: legacy gameplay keys (`GameDifficulty`, `ZombieMove`, etc.) never written back to a V3 config when `SandboxCode` is present
+  - Crossplay/EAC validation: EAC required when crossplay is enabled; warns when player count exceeds the 8-player crossplay limit
+  - Branch selection: Stable, Experimental, Experimental Fallback, Custom
+  - Five provider tests: provider metadata, SteamCMD arg construction, XML config round-trip, launch builder, validator rules
+
+### Fixed
+- Removed a stale test assertion for `GroupName="ArkMode"` no longer present in the ARK ASA settings XAML.
+
+---
+
 ## v3.4.4
 
 ### Added

@@ -12,6 +12,16 @@ This project follows semantic versioning.
 
 ### Fixed
 
+## [4.0.0] - 2026-06-26
+
+### Added
+
+- **7 Days to Die dedicated server support** — full first-class integration (Steam App ID 294420). This release establishes the 4.0 baseline with multi-game support including ARK ASA, Palworld, and 7 Days to Die.
+
+### Fixed
+
+- Removed stale `GroupName="ArkMode"` test assertion no longer present after the v3.4.0 ARK ASA redesign.
+
 ## [3.4.4] - 2026-06-26
 
 ### Added
