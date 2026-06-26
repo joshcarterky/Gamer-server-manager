@@ -1,9 +1,18 @@
 # Release Notes
 
-## v3.5.0
+## v4.0.0
 
 ### Added
-- **File Manager** — fully functional file browser for server install directories. Features a resizable folder tree, sortable file/folder table (Name, Type, Size, Modified), breadcrumb navigation, Back/Forward/Up/Home/Refresh controls, and a search filter. File operations include create folder, create text file, rename, copy, cut, paste, move, delete (with confirmation), upload, and download. An integrated text editor opens `.ini`, `.json`, `.yaml`, `.xml`, `.txt`, `.cfg`, `.log`, and other config files with save, Save As, reload, and unsaved-change warnings. All paths are validated to stay inside the server's install directory — directory traversal via `..`, symlinks, or absolute paths outside the root is blocked.
+- **File Manager** — fully functional file browser for server install directories. Resizable folder tree, sortable file/folder table (Name, Type, Size, Modified), breadcrumb navigation, Back/Forward/Up/Home/Refresh controls, and search. File operations: create folder, create text file, rename, copy, cut, paste, move, delete (with confirmation), upload, download. Integrated text editor for `.ini`, `.json`, `.yaml`, `.xml`, `.txt`, `.cfg`, `.log`, and other config files with save, Save As, reload, and unsaved-change warnings. All paths are validated to stay inside the server's install directory — directory traversal via `..`, symlinks, or absolute paths outside the root is blocked.
+- **Console view** — live log streaming and server command entry per server instance.
+- **Scheduler view** — per-server scheduled tasks (restart, backup, update, etc.).
+- **Monitoring view** — resource and health monitoring per server.
+- **Deploy view** — deployment workflow UI.
+- **System tray** — TrayService adds minimize-to-tray support.
+- **7 Days to Die dedicated server support** — full first-class integration (Steam App ID 294420): 6 ports, 33 settings across 9 categories, headless launch flags, SteamCMD argument builder with branch selection and credential masking, `serverconfig.xml` parser/writer with atomic writes, V2→V3 migration protection, crossplay/EAC validation, five provider tests.
+
+### Fixed
+- Removed a stale test assertion for `GroupName="ArkMode"` no longer present in the ARK ASA settings XAML.
 
 ---
 
