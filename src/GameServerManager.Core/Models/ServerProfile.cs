@@ -91,6 +91,11 @@ namespace GameServerManager.Core.Models
         public bool AutoBackupEnabled { get; set; } = false;
 
         /// <summary>
+        /// Whether to automatically restart the server if it crashes unexpectedly.
+        /// </summary>
+        public bool AutoRestartOnCrash { get; set; } = false;
+
+        /// <summary>
         /// Restart schedule (ISO 8601 duration or cron expression)
         /// </summary>
         public string? RestartSchedule { get; set; }

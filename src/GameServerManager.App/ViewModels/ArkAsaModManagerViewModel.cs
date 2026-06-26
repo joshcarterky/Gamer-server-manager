@@ -21,6 +21,8 @@ public sealed class ArkAsaModManagerViewModel : BaseViewModel
     private bool _hasUnsavedChanges;
     private ArkSurvivalAscendedServerProfile? _profile;
     private bool _isBrowserOpen;
+    private bool _isCheckingUpdates;
+    private string _updateCheckMessage = string.Empty;
 
     // CurseForge preview state
     private CurseForgePreviewState _previewState = CurseForgePreviewState.Hidden;
@@ -59,6 +61,7 @@ public sealed class ArkAsaModManagerViewModel : BaseViewModel
         DismissPreviewCommand = new RelayCommand(_ => ClearPreview());
         OpenBrowserCommand = new RelayCommand(_ => OpenBrowser());
         CloseBrowserCommand = new RelayCommand(_ => CloseBrowser());
+        CheckForUpdatesCommand = new RelayCommand(async _ => await CheckForUpdatesAsync(), () => !_isCheckingUpdates);
     }
 
     // ── Stats ────────────────────────────────────────────────
@@ -205,6 +208,29 @@ public sealed class ArkAsaModManagerViewModel : BaseViewModel
     public RelayCommand DismissPreviewCommand { get; }
     public RelayCommand OpenBrowserCommand { get; }
     public RelayCommand CloseBrowserCommand { get; }
+    public RelayCommand CheckForUpdatesCommand { get; }
+
+    public bool IsCheckingUpdates
+    {
+        get => _isCheckingUpdates;
+        private set
+        {
+            if (SetProperty(ref _isCheckingUpdates, value))
+                CheckForUpdatesCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    public string UpdateCheckMessage
+    {
+        get => _updateCheckMessage;
+        private set
+        {
+            if (SetProperty(ref _updateCheckMessage, value))
+                OnPropertyChanged(nameof(HasUpdateCheckMessage));
+        }
+    }
+
+    public bool HasUpdateCheckMessage => !string.IsNullOrEmpty(_updateCheckMessage);
 
     // ── Load / Save ──────────────────────────────────────────
     public void LoadFrom(ArkSurvivalAscendedServerProfile profile, AppSettings? settings = null)
@@ -788,6 +814,48 @@ public sealed class ArkAsaModManagerViewModel : BaseViewModel
         Author = entry.Author,
         Summary = entry.Summary
     };
+
+    private async Task CheckForUpdatesAsync()
+    {
+        if (IsCheckingUpdates) return;
+        IsCheckingUpdates = true;
+        UpdateCheckMessage = "Checking CurseForge for updates...";
+        try
+        {
+            var settings = await new AppSettingsService().LoadAsync();
+            if (!settings.CurseForgeEnabled || string.IsNullOrWhiteSpace(settings.CurseForgeApiKey))
+            {
+                UpdateCheckMessage = "CurseForge integration not configured — enable it in Settings → Integrations.";
+                return;
+            }
+            using var service = new CurseForgeService(settings.CurseForgeApiKey, settings.CurseForgeGameId, settings.CurseForgeTimeoutSeconds);
+            var mods = AllMods.ToList();
+            int found = 0;
+            foreach (var mod in mods)
+            {
+                if (!int.TryParse(mod.ModId, out var numericId)) continue;
+                var result = await service.GetModByIdAsync(numericId);
+                if (result.Status == CurseForgeLookupStatus.Success && result.Mod != null)
+                {
+                    mod.CfLastUpdated = result.Mod.DateModified;
+                    if (string.IsNullOrWhiteSpace(mod.Name) || mod.Name == mod.ModId)
+                        mod.Name = result.Mod.Name;
+                    found++;
+                }
+            }
+            UpdateCheckMessage = found > 0
+                ? $"Found CurseForge data for {found} of {mods.Count} mods."
+                : "No mods matched by numeric project ID — paste CurseForge project IDs to enable update checks.";
+        }
+        catch (Exception ex)
+        {
+            UpdateCheckMessage = $"Update check failed: {ex.Message}";
+        }
+        finally
+        {
+            IsCheckingUpdates = false;
+        }
+    }
 }
 
 // ── Per-mod ViewModel ────────────────────────────────────────
@@ -803,6 +871,7 @@ public sealed class ArkModEntryViewModel : BaseViewModel
     private bool _isClusterWide;
     private string _notes = string.Empty;
     private bool _requiredRestart = true;
+    private DateTime? _cfLastUpdated;
 
     public ArkModEntryViewModel(ArkAsaModManagerViewModel parent)
     {
@@ -886,6 +955,35 @@ public sealed class ArkModEntryViewModel : BaseViewModel
     public string CurseForgeUrl { get; set; } = string.Empty;
     public string Author { get; set; } = string.Empty;
     public string Summary { get; set; } = string.Empty;
+
+    public DateTime? CfLastUpdated
+    {
+        get => _cfLastUpdated;
+        set
+        {
+            if (SetProperty(ref _cfLastUpdated, value))
+            {
+                OnPropertyChanged(nameof(UpdateInfoText));
+                OnPropertyChanged(nameof(HasUpdateInfo));
+            }
+        }
+    }
+
+    public string UpdateInfoText
+    {
+        get
+        {
+            if (_cfLastUpdated == null) return string.Empty;
+            var days = (DateTime.UtcNow - _cfLastUpdated.Value).TotalDays;
+            if (days < 1) return "CF: updated today";
+            if (days < 2) return "CF: updated yesterday";
+            if (days < 30) return $"CF: updated {(int)days}d ago";
+            if (days < 365) return $"CF: updated {(int)(days / 30)}mo ago";
+            return $"CF: updated {(int)(days / 365)}yr ago";
+        }
+    }
+
+    public bool HasUpdateInfo => _cfLastUpdated.HasValue;
 
     public string StatusBadgeText => _validationStatus switch
     {

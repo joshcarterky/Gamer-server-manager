@@ -343,93 +343,17 @@
         </Style>
     </UserControl.Resources>
 
-    <!-- ═══ ROOT 3-ROW GRID ═══ -->
+    <!-- ═══ ROOT 2-ROW GRID ═══ -->
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="60"/>   <!-- Header -->
             <RowDefinition Height="Auto"/> <!-- Unsaved changes banner -->
             <RowDefinition Height="*"/>    <!-- Sidebar + Content -->
         </Grid.RowDefinitions>
 
         <!-- ═══════════════════════════════════════════════════════════
-             ROW 0 — TOP HEADER BAR
+             ROW 0 — UNSAVED CHANGES BANNER
              ═══════════════════════════════════════════════════════════ -->
-        <Border Grid.Row="0" Background="#AA0A1520" BorderBrush="#1A3249" BorderThickness="0,0,0,1">
-            <Grid Margin="16,0,12,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>  <!-- Logo + title -->
-                    <ColumnDefinition Width="1"/>     <!-- Separator -->
-                    <ColumnDefinition Width="Auto"/>  <!-- Server chip -->
-                    <ColumnDefinition Width="*"/>     <!-- Search (flex) -->
-                    <ColumnDefinition Width="Auto"/>  <!-- Mode toggle -->
-                    <ColumnDefinition Width="Auto"/>  <!-- Action buttons -->
-                </Grid.ColumnDefinitions>
-
-                <!-- Logo + Title -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
-                    <Border Width="34" Height="34" CornerRadius="8" Background="#152A4A">
-                        <Polygon Points="17,7 29,27 5,27" Fill="#4B9FFF" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="ARK ASA Settings" Foreground="#F1F5F9" FontSize="14" FontWeight="SemiBold"/>
-                        <TextBlock Text="Configure and manage your ARK: Survival Ascended server" Foreground="#7A94B0" FontSize="11"/>
-                    </StackPanel>
-                </StackPanel>
-
-                <!-- Separator -->
-                <Border Grid.Column="1" Width="1" Background="#1A3249" Margin="0,12"/>
-
-                <!-- Server profile chip -->
-                <Border Grid.Column="2" Background="#08141E" BorderBrush="#1A3249" BorderThickness="1" CornerRadius="8"
-                        Padding="10,0" Margin="16,10" Cursor="Hand">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Ellipse Width="8" Height="8" Fill="#22C55E" VerticalAlignment="Center"/>
-                        <StackPanel Margin="8,0,0,0">
-                            <TextBlock Text="ARK: Survival Ascended" Foreground="#F1F5F9" FontSize="12" FontWeight="SemiBold"/>
-                            <TextBlock Text="{Binding ProfileDisplayName}" Foreground="#7A94B0" FontSize="11"/>
-                        </StackPanel>
-                        <Path Data="M 0 0 L 4 4 L 8 0 Z" Fill="#7A94B0" Width="8" Height="4" Margin="10,0,0,0" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Border>
-
-                <!-- Search bar -->
-                <Border Grid.Column="3" Background="#06101A" BorderBrush="#1E3349" BorderThickness="1" CornerRadius="8" Margin="0,11,12,11">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="&#xE721;" FontFamily="Segoe MDL2 Assets" Foreground="#7A94B0"
-                                   FontSize="14" Margin="10,0,0,0" VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="1"
-                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                                 Background="Transparent" BorderThickness="0"
-                                 Foreground="#F1F5F9" CaretBrush="#F1F5F9"
-                                 Padding="8,0" MinWidth="160"
-                                 VerticalContentAlignment="Center"
-                                 ToolTip="Search setting names, INI keys, and descriptions"/>
-                        <Border Grid.Column="2" Background="#0D1826" BorderBrush="#1A3249" BorderThickness="1"
-                                CornerRadius="4" Padding="5,2" Margin="0,0,6,0" VerticalAlignment="Center">
-                            <TextBlock Text="Ctrl+K" Foreground="#4A6A80" FontSize="10"/>
-                        </Border>
-                    </Grid>
-                </Border>
-
-                <!-- Header action buttons -->
-                <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Content="Save Changes" Command="{Binding SaveCommand}" Style="{StaticResource HeaderPrimaryButton}"/>
-                    <Button Content="Validate" Command="{Binding ValidateCommand}" Style="{StaticResource HeaderOutlineButton}"/>
-                    <Button Content="Export" Command="{Binding ExportConfigurationCommand}" Style="{StaticResource HeaderOutlineButton}"/>
-                    <Button Content="Reset Category" Command="{Binding ResetCategoryCommand}" Style="{StaticResource HeaderOutlineButton}" Margin="0"/>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <!-- ═══════════════════════════════════════════════════════════
-             ROW 1 — UNSAVED CHANGES BANNER
-             ═══════════════════════════════════════════════════════════ -->
-        <Border Grid.Row="1" Background="#0F1F10" BorderBrush="#1A4A1A" BorderThickness="0,0,0,1" Padding="20,6"
+        <Border Grid.Row="0" Background="#0F1F10" BorderBrush="#1A4A1A" BorderThickness="0,0,0,1" Padding="20,6"
                 Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BooleanToVisibilityConverter}}">
             <Grid>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -444,9 +368,9 @@
         </Border>
 
         <!-- ═══════════════════════════════════════════════════════════
-             ROW 2 — SIDEBAR + MAIN CONTENT
+             ROW 1 — SIDEBAR + MAIN CONTENT
              ═══════════════════════════════════════════════════════════ -->
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="220"/>  <!-- Sidebar -->
                 <ColumnDefinition Width="*"/>    <!-- Main content -->
@@ -834,50 +758,6 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- Configuration status strip (3 columns) -->
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="10"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="10"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <!-- Configuration column -->
-                            <Border Grid.Column="0" Background="#0D1826" BorderBrush="#1A3249" BorderThickness="1" CornerRadius="10" Padding="16">
-                                <StackPanel>
-                                    <TextBlock Text="Configuration" Foreground="#F1F5F9" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                                    <TextBlock Text="Settings are loaded from" Foreground="#7A94B0" FontSize="11" Margin="0,0,0,4"/>
-                                    <TextBlock Text="{Binding GameUserSettingsPath}" Foreground="#4A6A80" FontSize="10"
-                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis"/>
-                                </StackPanel>
-                            </Border>
-                            <!-- INI Sync column -->
-                            <Border Grid.Column="2" Background="#0D1826" BorderBrush="#1A3249" BorderThickness="1" CornerRadius="10" Padding="16">
-                                <StackPanel>
-                                    <TextBlock Text="INI Sync" Foreground="#F1F5F9" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                                    <TextBlock Text="{Binding LastValidatedText, StringFormat='Last synced: {0}'}"
-                                               Foreground="#7A94B0" FontSize="11" Margin="0,0,0,4"/>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="Status: " Foreground="#7A94B0" FontSize="11"/>
-                                        <TextBlock Text="{Binding IniSyncStatusText}" Foreground="{Binding IniSyncStatusColor}"
-                                                   FontSize="11" FontWeight="SemiBold"/>
-                                    </StackPanel>
-                                </StackPanel>
-                            </Border>
-                            <!-- Launch Arguments column -->
-                            <Border Grid.Column="4" Background="#0D1826" BorderBrush="#1A3249" BorderThickness="1" CornerRadius="10" Padding="16">
-                                <StackPanel>
-                                    <TextBlock Text="Launch Arguments" Foreground="#F1F5F9" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                                    <TextBlock Text="Custom launch arguments are up to date" Foreground="#7A94B0" FontSize="11" Margin="0,0,0,4"/>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="Status: " Foreground="#7A94B0" FontSize="11"/>
-                                        <TextBlock Text="{Binding LaunchArgsStatusText}" Foreground="{Binding LaunchArgsStatusColor}"
-                                                   FontSize="11" FontWeight="SemiBold"/>
-                                    </StackPanel>
-                                </StackPanel>
-                            </Border>
-                        </Grid>
 
                     </StackPanel>
                     <!-- END OVERVIEW TAB -->
@@ -983,8 +863,12 @@
                                             Visibility="{Binding IsBrowserClosed, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                     <Button Content="Clear All" Command="{Binding ClearAllCommand}" Style="{StaticResource ActionButton}"
                                             Visibility="{Binding IsBrowserClosed, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                    <Button Content="↻ Check for Updates" Command="{Binding CheckForUpdatesCommand}" Style="{StaticResource ActionButton}"
+                                            Visibility="{Binding IsBrowserClosed, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                 </StackPanel>
                             </Grid>
+                            <TextBlock Text="{Binding UpdateCheckMessage}" Foreground="#7A94B0" FontSize="12" Margin="0,0,0,8"
+                                       Visibility="{Binding HasUpdateCheckMessage, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
                             <!-- CurseForge Mod Browser (overlays mod list when open) -->
                             <Grid Visibility="{Binding IsBrowserOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -1253,6 +1137,8 @@
                                                                Visibility="{Binding HasWarning, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                                     <TextBlock Text="{Binding Notes}" Foreground="#6A8A9A" FontSize="11" TextWrapping="Wrap"
                                                                Visibility="{Binding HasWarning, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                                    <TextBlock Text="{Binding UpdateInfoText}" Foreground="#3D8B59" FontSize="11"
+                                                               Visibility="{Binding HasUpdateInfo, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                                 </StackPanel>
                                                 <Border Grid.Column="3" CornerRadius="4" Padding="8,3" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                         Background="{Binding StatusBadgeColor}">
@@ -1395,6 +1281,213 @@
                                     </StackPanel>
                                 </StackPanel>
                             </Expander>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ═══ RCON / CONSOLE TAB ═══ -->
+                    <Border Style="{StaticResource Card}"
+                            Visibility="{Binding IsRconConsoleTab, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel>
+                            <TextBlock Text="RCON / Console" Foreground="White" FontSize="20" FontWeight="SemiBold"/>
+                            <TextBlock Text="Live player management, admin commands, and RCON connection tools." Style="{StaticResource Label}" Margin="0,4,0,16"/>
+
+                            <!-- Connection Status Row -->
+                            <Border Background="#0B1E2E" BorderBrush="#1E3349" BorderThickness="1" CornerRadius="8" Padding="16,12" Margin="0,0,0,14">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Ellipse Width="10" Height="10" Fill="{Binding RconStatusColor}" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{Binding RconStatusText}" Foreground="White" FontSize="13"/>
+                                        <TextBlock Text=" · " Foreground="#4E6070" FontSize="13"/>
+                                        <TextBlock Text="Port " Foreground="#7A94B0" FontSize="13"/>
+                                        <TextBlock Text="{Binding RconPortDisplay}" Foreground="#F1F5F9" FontSize="13"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                        <Button Content="Test Connection" Command="{Binding TestRconCommand}" Style="{StaticResource OutlineButton}" Margin="0,0,8,0"/>
+                                        <Button Content="↻ Refresh Players" Command="{Binding RefreshPlayersCommand}" Style="{StaticResource PrimaryActionButton}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Live Players -->
+                            <TextBlock Text="LIVE PLAYERS" Foreground="#4E6070" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                            <Border Background="#0B1E2E" BorderBrush="#1E3349" BorderThickness="1" CornerRadius="8" Padding="0" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <Border Padding="16,10" BorderBrush="#1E3349" BorderThickness="0,0,0,1">
+                                        <TextBlock Text="{Binding PlayerCountText}" Foreground="#7A94B0" FontSize="12"/>
+                                    </Border>
+                                    <!-- Empty state -->
+                                    <TextBlock Text="No players connected — click Refresh Players to check." Foreground="#4E6070"
+                                               FontSize="13" Padding="16" TextWrapping="Wrap"
+                                               Visibility="{Binding NoPlayers, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                    <!-- Player list -->
+                                    <ItemsControl ItemsSource="{Binding Players}"
+                                                  Visibility="{Binding HasPlayers, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border BorderBrush="#142A40" BorderThickness="0,0,0,1" Padding="16,10">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel>
+                                                            <TextBlock Text="{Binding Name}" Foreground="White" FontSize="13"/>
+                                                            <TextBlock Text="{Binding SteamId}" Foreground="#4E6070" FontSize="11"/>
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                            <Button Content="Kick" CommandParameter="{Binding SteamId}"
+                                                                    Command="{Binding DataContext.KickPlayerCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    Style="{StaticResource OutlineButton}" Margin="0,0,8,0"/>
+                                                            <Button Content="Ban" CommandParameter="{Binding SteamId}"
+                                                                    Command="{Binding DataContext.BanPlayerCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    Style="{StaticResource DangerButton}"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Admin Quick Commands -->
+                            <TextBlock Text="ADMIN COMMANDS" Foreground="#4E6070" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                            <Border Background="#0B1E2E" BorderBrush="#1E3349" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,0,14">
+                                <StackPanel>
+                                    <WrapPanel Margin="0,0,0,14">
+                                        <Button Content="Save World" Command="{Binding SaveWorldCommand}" Style="{StaticResource OutlineButton}" Margin="0,0,8,8"/>
+                                        <Button Content="Destroy Wild Dinos" Command="{Binding DestroyWildDinosCommand}" Style="{StaticResource OutlineButton}" Margin="0,0,8,8"/>
+                                        <Button Content="List Players" Command="{Binding RefreshPlayersCommand}" Style="{StaticResource OutlineButton}" Margin="0,0,8,8"/>
+                                    </WrapPanel>
+
+                                    <!-- Broadcast -->
+                                    <TextBlock Text="Broadcast Message" Foreground="#7A94B0" FontSize="12" Margin="0,0,0,4"/>
+                                    <Grid Margin="0,0,0,12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Text="{Binding BroadcastMessage, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource Input}" Margin="0,0,8,0"/>
+                                        <Button Grid.Column="1" Content="Send" Command="{Binding BroadcastCommand}" Style="{StaticResource PrimaryActionButton}"/>
+                                    </Grid>
+
+                                    <!-- Custom Command -->
+                                    <TextBlock Text="Custom RCON Command" Foreground="#7A94B0" FontSize="12" Margin="0,0,0,4"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Text="{Binding CustomRconCommand, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource Input}" Margin="0,0,8,0"/>
+                                        <Button Grid.Column="1" Content="Execute" Command="{Binding SendCustomRconCommand}" Style="{StaticResource OutlineButton}"/>
+                                    </Grid>
+
+                                    <!-- Command Result -->
+                                    <TextBox Text="{Binding RconCommandResult, Mode=OneWay}"
+                                             IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
+                                             Style="{StaticResource Input}" MinHeight="48" MaxHeight="120"
+                                             FontFamily="Consolas" FontSize="11"
+                                             Margin="0,10,0,0"
+                                             Visibility="{Binding HasRconResult, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Open in Console Tab -->
+                            <Border Background="#0B1E2E" BorderBrush="#1E3349" BorderThickness="1" CornerRadius="8" Padding="16,12">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Full Console" Foreground="White" FontSize="13" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Open the Console tab to see live server output and full command history." Foreground="#7A94B0" FontSize="12" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="→ Open Console" Command="{Binding OpenInConsoleCommand}" Style="{StaticResource PrimaryActionButton}"/>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ═══ BACKUPS TAB ═══ -->
+                    <Border Style="{StaticResource Card}"
+                            Visibility="{Binding IsBackupsTab, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Backups" Foreground="White" FontSize="20" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Create and restore server save backups (SavedArks + config files)." Style="{StaticResource Label}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                                    <Button Content="Open Folder" Command="{Binding OpenBackupFolderCommand}" Style="{StaticResource OutlineButton}" Margin="0,0,8,0"/>
+                                    <Button Content="+ Create Backup" Command="{Binding CreateBackupCommand}" Style="{StaticResource PrimaryActionButton}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Status message -->
+                            <TextBlock Text="{Binding BackupStatusText}" Foreground="#7A94B0" FontSize="12" Margin="0,0,0,10"
+                                       Visibility="{Binding HasBackupStatus, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                            <!-- Backup folder path -->
+                            <Border Background="#0B1E2E" BorderBrush="#1E3349" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,0,0,14">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Folder: " Foreground="#4E6070" FontSize="12"/>
+                                    <TextBlock Text="{Binding BackupFolderPath}" Foreground="#7A94B0" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Empty state -->
+                            <Border Background="#0B1E2E" BorderBrush="#1E3349" BorderThickness="1" CornerRadius="8" Padding="24"
+                                    Visibility="{Binding HasNoBackups, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <TextBlock Text="No backups found" Foreground="#7A94B0" FontSize="14" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Click + Create Backup to make your first backup." Foreground="#4E6070" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Backup list -->
+                            <ItemsControl ItemsSource="{Binding Backups}"
+                                          Visibility="{Binding HasBackups, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#0B1E2E" BorderBrush="#1E3349" BorderThickness="1" CornerRadius="8"
+                                                Padding="14,10" Margin="0,0,0,6">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding ShortName}" Foreground="White" FontSize="13" TextTrimming="CharacterEllipsis"/>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                        <TextBlock Text="{Binding DateText}" Foreground="#4E6070" FontSize="11"/>
+                                                        <TextBlock Text=" · " Foreground="#2A3A4A" FontSize="11"/>
+                                                        <TextBlock Text="{Binding SizeText}" Foreground="#4E6070" FontSize="11"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                    <Button Content="Restore" CommandParameter="{Binding}"
+                                                            Command="{Binding DataContext.RestoreBackupCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            Style="{StaticResource OutlineButton}" Margin="0,0,8,0"/>
+                                                    <Button Content="Delete" CommandParameter="{Binding}"
+                                                            Command="{Binding DataContext.DeleteBackupCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            Style="{StaticResource DangerButton}"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
                     </Border>
 

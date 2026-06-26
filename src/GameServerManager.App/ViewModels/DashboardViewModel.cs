@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows.Input;
 using System.Windows.Threading;
+using GameServerManager.App;
 using GameServerManager.Core.Models;
 using GameServerManager.GameProviders;
 using GameServerManager.Services;
@@ -36,10 +37,14 @@ public class DashboardViewModel : BaseViewModel, IDisposable
         StopCommand = new RelayCommand(async parameter => await StopAsync(parameter as ServerCardViewModel));
         RestartCommand = new RelayCommand(async parameter => await RestartAsync(parameter as ServerCardViewModel));
         RefreshCommand = new RelayCommand(async _ => await LoadAsync());
+        StartAllCommand = new RelayCommand(async _ => await StartAllAsync());
+        StopAllCommand = new RelayCommand(async _ => await StopAllAsync());
 
         _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _refreshTimer.Tick += async (_, _) => await RefreshMonitoringAsync();
         _refreshTimer.Start();
+
+        _processService.ServerCrashed += OnServerCrashed;
 
         _ = LoadAsync();
     }
@@ -51,6 +56,8 @@ public class DashboardViewModel : BaseViewModel, IDisposable
     public ICommand StopCommand { get; }
     public ICommand RestartCommand { get; }
     public ICommand RefreshCommand { get; }
+    public ICommand StartAllCommand { get; }
+    public ICommand StopAllCommand { get; }
 
     public string Message
     {
@@ -433,9 +440,95 @@ public class DashboardViewModel : BaseViewModel, IDisposable
         }
     }
 
+    private async Task StartAllAsync()
+    {
+        var toStart = Servers.Where(s => s.Status != ServerStatus.Running).ToList();
+        if (toStart.Count == 0)
+        {
+            Message = "All servers are already running.";
+            return;
+        }
+
+        int started = 0;
+        foreach (var card in toStart)
+        {
+            try
+            {
+                await _processService.StartServerAsync(card.Profile);
+                await _serversJsonService.UpdateServerAsync(card.Profile);
+                started++;
+            }
+            catch (Exception ex)
+            {
+                AddActivity("Start Failed", $"{card.Profile.ProfileName}: {ex.Message}", "#FF6969");
+            }
+        }
+
+        await RefreshMonitoringAsync();
+        Message = $"Started {started} server(s).";
+        AddActivity("Start All", $"Started {started} of {toStart.Count} server(s).", "#4AA8FF");
+    }
+
+    private async Task StopAllAsync()
+    {
+        var running = Servers.Where(s => s.Status == ServerStatus.Running).ToList();
+        if (running.Count == 0)
+        {
+            Message = "No servers are currently running.";
+            return;
+        }
+
+        int stopped = 0;
+        foreach (var card in running)
+        {
+            try
+            {
+                await _processService.StopServerAsync(card.Profile);
+                await _serversJsonService.UpdateServerAsync(card.Profile);
+                stopped++;
+            }
+            catch (Exception ex)
+            {
+                AddActivity("Stop Failed", $"{card.Profile.ProfileName}: {ex.Message}", "#FF6969");
+            }
+        }
+
+        await RefreshMonitoringAsync();
+        Message = $"Stopped {stopped} server(s).";
+        AddActivity("Stop All", $"Stopped {stopped} of {running.Count} server(s).", "#FA6D72");
+    }
+
+    private async void OnServerCrashed(object? sender, ServerProfile profile)
+    {
+        if (!profile.AutoRestartOnCrash)
+            return;
+
+        await System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
+        {
+            AddActivity("Server Crashed", $"{profile.ProfileName} — auto-restarting in 5s…", "#FF9F1C");
+            Message = $"{profile.ProfileName} crashed. Auto-restarting…";
+            TrayService.ShowBalloon($"Server Crashed: {profile.ProfileName}", "Auto-restarting in 5 seconds…", TrayBalloonIcon.Warning);
+            await Task.Delay(5000);
+            try
+            {
+                await _processService.StartServerAsync(profile);
+                await _serversJsonService.UpdateServerAsync(profile);
+                await RefreshMonitoringAsync();
+                AddActivity("Auto-Restarted", profile.ProfileName, "#4AA8FF");
+                Message = $"Auto-restarted {profile.ProfileName}.";
+            }
+            catch (Exception ex)
+            {
+                AddActivity("Auto-Restart Failed", $"{profile.ProfileName}: {ex.Message}", "#FF6969");
+                Message = $"Auto-restart failed: {ex.Message}";
+            }
+        });
+    }
+
     public void Dispose()
     {
         _refreshTimer.Stop();
+        _processService.ServerCrashed -= OnServerCrashed;
         _processService.Dispose();
     }
 }

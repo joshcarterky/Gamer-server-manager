@@ -199,6 +199,22 @@ public class ServerCardViewModel : BaseViewModel
     public string LastRestart => Profile.LastStartedAt?.ToLocalTime().ToString("g") ?? "Never";
     public string BackupStatus => Profile.AutoBackupEnabled ? $"Auto — {LastBackup}" : $"Manual — {LastBackup}";
     public string UpdateStatus => Profile.AutoUpdateEnabled ? "Auto update on" : "Manual update";
+
+    public bool AutoRestartOnCrash
+    {
+        get => Profile.AutoRestartOnCrash;
+        set
+        {
+            if (Profile.AutoRestartOnCrash != value)
+            {
+                Profile.AutoRestartOnCrash = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(AutoRestartLabel));
+            }
+        }
+    }
+
+    public string AutoRestartLabel => Profile.AutoRestartOnCrash ? "Auto-restart: ON" : "Auto-restart: OFF";
     public string DiskUsageText => BuildDiskUsageText();
     public int DiskUsagePercent => 0;
     public string NetworkActivityText => "Not available";

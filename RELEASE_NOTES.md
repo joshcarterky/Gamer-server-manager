@@ -1,5 +1,12 @@
 # Release Notes
 
+## v3.5.0
+
+### Added
+- **File Manager** — fully functional file browser for server install directories. Features a resizable folder tree, sortable file/folder table (Name, Type, Size, Modified), breadcrumb navigation, Back/Forward/Up/Home/Refresh controls, and a search filter. File operations include create folder, create text file, rename, copy, cut, paste, move, delete (with confirmation), upload, and download. An integrated text editor opens `.ini`, `.json`, `.yaml`, `.xml`, `.txt`, `.cfg`, `.log`, and other config files with save, Save As, reload, and unsaved-change warnings. All paths are validated to stay inside the server's install directory — directory traversal via `..`, symlinks, or absolute paths outside the root is blocked.
+
+---
+
 ## v3.4.2
 
 ### Fixed

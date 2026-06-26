@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
+using System.Text.RegularExpressions;
 using System.Windows;
 using GameServerManager.Core.Models;
 using GameServerManager.GameProviders;
@@ -8,6 +10,7 @@ using GameServerManager.Services;
 using GameServerManager.Services.ArkSurvivalAscended;
 using GameServerManager.Services.Configuration;
 using GameServerManager.Services.CurseForge;
+using GameServerManager.App.Views;
 using Microsoft.Win32;
 
 namespace GameServerManager.App.ViewModels;
@@ -42,6 +45,19 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
     private DateTime _lastConfigurationWatcherEventUtc = DateTime.MinValue;
     private bool _suppressConfigurationWatcher;
 
+    // RCON Console tab state
+    private bool _rconBusy;
+    private string _rconStatusText = "Not tested";
+    private string _rconStatusColor = "#64748B";
+    private string _broadcastMessage = string.Empty;
+    private string _customRconCommand = string.Empty;
+    private string _rconCommandResult = string.Empty;
+
+    // Backups tab state
+    private bool _backupsBusy;
+    private string _backupStatusText = string.Empty;
+    private ArkBackupListItem? _selectedBackup;
+
     public ArkAsaSettingsViewModel(ServerProfile? profile = null)
     {
         _serversJsonService = new ServersJsonService(_paths);
@@ -68,6 +84,8 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         FilteredSections = new ObservableCollection<ArkSettingsSectionViewModel>();
         Cluster = new ArkAsaClusterViewModel();
         Mods = new ArkAsaModManagerViewModel();
+        Players = new ObservableCollection<ArkRconPlayerItem>();
+        Backups = new ObservableCollection<ArkBackupListItem>();
         SaveCommand = new RelayCommand(async _ => await SaveAsync());
         RevertCommand = new RelayCommand(async _ => await LoadAsync());
         ReviewChangesCommand = new RelayCommand(_ => ReviewChanges());
@@ -86,7 +104,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         ExportGameUserSettingsCommand = new RelayCommand(_ => ExportIni(RawGameUserSettings, "GameUserSettings.ini"));
         ImportGameIniCommand = new RelayCommand(_ => ImportIni(ref _profile, isGameIni: true));
         ExportGameIniCommand = new RelayCommand(_ => ExportIni(RawGameIni, "Game.ini"));
-        CreateBackupCommand = new RelayCommand(async _ => await CreateBackupAsync());
+        CreateBackupCommand = new RelayCommand(async _ => await CreateBackupAndRefreshAsync());
         ExportConfigurationCommand = new RelayCommand(_ => ExportConfiguration());
         ManageModsCommand = new RelayCommand(_ => SelectedTab = "Mods");
         GenerateClusterIdCommand = new RelayCommand(_ => GenerateClusterId());
@@ -94,6 +112,23 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         CreateClusterDirectoryCommand = new RelayCommand(_ => CreateClusterDirectory());
         OpenClusterFolderCommand = new RelayCommand(_ => OpenClusterFolder());
         ResetClusterCommand = new RelayCommand(_ => ResetClusterSettings());
+
+        // RCON Console tab commands
+        RefreshPlayersCommand = new RelayCommand(async _ => await RefreshPlayersAsync());
+        KickPlayerCommand = new RelayCommand(async p => await SendRconAsync($"KickPlayer {p}"));
+        BanPlayerCommand = new RelayCommand(async p => await SendRconAsync($"BanPlayer {p}"));
+        BroadcastCommand = new RelayCommand(async _ => await SendRconAsync($"Broadcast {BroadcastMessage}"));
+        SaveWorldCommand = new RelayCommand(async _ => await SendRconAsync("saveworld"));
+        DestroyWildDinosCommand = new RelayCommand(async _ => await SendRconAsync("destroywilddinos"));
+        SendCustomRconCommand = new RelayCommand(async _ => await SendRconAsync(CustomRconCommand));
+        TestRconCommand = new RelayCommand(async _ => await TestRconConnectionAsync());
+        OpenInConsoleCommand = new RelayCommand(_ => OpenInConsole());
+
+        // Backups tab commands
+        RefreshBackupsCommand = new RelayCommand(async _ => await RefreshBackupsAsync());
+        RestoreBackupCommand = new RelayCommand(async p => await RestoreBackupAsync(p as ArkBackupListItem ?? _selectedBackup));
+        DeleteBackupCommand = new RelayCommand(async p => await DeleteBackupAsync(p as ArkBackupListItem ?? _selectedBackup));
+        OpenBackupFolderCommand = new RelayCommand(_ => OpenFolder(_profile.Paths.BackupPath));
 
         LoadRegistry();
         SelectCategory("Overview");
@@ -134,6 +169,99 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
     public RelayCommand CreateClusterDirectoryCommand { get; }
     public RelayCommand OpenClusterFolderCommand { get; }
     public RelayCommand ResetClusterCommand { get; }
+
+    // RCON Console tab commands
+    public RelayCommand RefreshPlayersCommand { get; }
+    public RelayCommand KickPlayerCommand { get; }
+    public RelayCommand BanPlayerCommand { get; }
+    public RelayCommand BroadcastCommand { get; }
+    public RelayCommand SaveWorldCommand { get; }
+    public RelayCommand DestroyWildDinosCommand { get; }
+    public RelayCommand SendCustomRconCommand { get; }
+    public RelayCommand TestRconCommand { get; }
+    public RelayCommand OpenInConsoleCommand { get; }
+
+    // RCON Console tab collections and state
+    public ObservableCollection<ArkRconPlayerItem> Players { get; }
+
+    public string RconStatusText
+    {
+        get => _rconStatusText;
+        private set => SetProperty(ref _rconStatusText, value);
+    }
+
+    public string RconStatusColor
+    {
+        get => _rconStatusColor;
+        private set => SetProperty(ref _rconStatusColor, value);
+    }
+
+    public string BroadcastMessage
+    {
+        get => _broadcastMessage;
+        set => SetProperty(ref _broadcastMessage, value);
+    }
+
+    public string CustomRconCommand
+    {
+        get => _customRconCommand;
+        set => SetProperty(ref _customRconCommand, value);
+    }
+
+    public string RconCommandResult
+    {
+        get => _rconCommandResult;
+        private set
+        {
+            if (SetProperty(ref _rconCommandResult, value))
+                OnPropertyChanged(nameof(HasRconResult));
+        }
+    }
+
+    public bool HasRconResult => !string.IsNullOrEmpty(_rconCommandResult);
+
+    public string PlayerCountText => Players.Count == 0 ? "No players online" : $"{Players.Count} player{(Players.Count == 1 ? "" : "s")} online";
+    public bool HasPlayers => Players.Count > 0;
+    public bool NoPlayers => Players.Count == 0;
+    public bool RconEnabled => _profile.Network.RCONEnabled;
+    public string RconPortDisplay => _profile.Network.RCONPort.ToString();
+
+    // Backups tab commands
+    public RelayCommand RefreshBackupsCommand { get; }
+    public RelayCommand RestoreBackupCommand { get; }
+    public RelayCommand DeleteBackupCommand { get; }
+    public RelayCommand OpenBackupFolderCommand { get; }
+
+    // Backups tab collections and state
+    public ObservableCollection<ArkBackupListItem> Backups { get; }
+
+    public ArkBackupListItem? SelectedBackup
+    {
+        get => _selectedBackup;
+        set
+        {
+            if (SetProperty(ref _selectedBackup, value))
+                OnPropertyChanged(nameof(HasSelectedBackup));
+        }
+    }
+
+    public bool HasSelectedBackup => _selectedBackup != null;
+
+    public string BackupStatusText
+    {
+        get => _backupStatusText;
+        private set
+        {
+            if (SetProperty(ref _backupStatusText, value))
+                OnPropertyChanged(nameof(HasBackupStatus));
+        }
+    }
+
+    public bool HasBackupStatus => !string.IsNullOrEmpty(_backupStatusText);
+
+    public bool HasBackups => Backups.Count > 0;
+    public bool HasNoBackups => Backups.Count == 0;
+    public string BackupFolderPath => _profile.Paths.BackupPath;
 
     public string SearchText
     {
@@ -202,12 +330,16 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
                 OnPropertyChanged(nameof(IsHealthValidationTab));
                 OnPropertyChanged(nameof(IsStartupTab));
                 OnPropertyChanged(nameof(IsRawEditorTab));
+                OnPropertyChanged(nameof(IsRconConsoleTab));
+                OnPropertyChanged(nameof(IsBackupsTab));
                 OnPropertyChanged(nameof(IsSettingsTab));
                 OnPropertyChanged(nameof(CategoryDescription));
                 if (!IsRawEditorTab)
                 {
                     RevealSensitiveRawValues = false;
                 }
+                if (IsRconConsoleTab) _ = RefreshPlayersAsync();
+                else if (IsBackupsTab) _ = RefreshBackupsAsync();
                 RefreshNavigationState();
             }
         }
@@ -219,7 +351,9 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
     public bool IsClusterTab => SelectedTab.Equals("Cluster", StringComparison.OrdinalIgnoreCase);
     public bool IsModsTab => SelectedTab.Equals("Mods", StringComparison.OrdinalIgnoreCase);
     public bool IsRawEditorTab => SelectedTab.Equals("Raw INI Editor", StringComparison.OrdinalIgnoreCase);
-    public bool IsSettingsTab => !IsOverviewTab && !IsHealthValidationTab && !IsStartupTab && !IsClusterTab && !IsModsTab && !IsRawEditorTab;
+    public bool IsRconConsoleTab => SelectedTab.Equals("RCON / Console", StringComparison.OrdinalIgnoreCase);
+    public bool IsBackupsTab => SelectedTab.Equals("Backups", StringComparison.OrdinalIgnoreCase);
+    public bool IsSettingsTab => !IsOverviewTab && !IsHealthValidationTab && !IsStartupTab && !IsClusterTab && !IsModsTab && !IsRawEditorTab && !IsRconConsoleTab && !IsBackupsTab;
     public string ModeDescription => ShowAdvanced
         ? "Full configuration access for experienced ARK administrators."
         : "Recommended settings for most ARK servers.";
@@ -1254,19 +1388,6 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         MessageBox.Show(DiffPreview, "Pending ARK Configuration Changes", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private async Task CreateBackupAsync()
-    {
-        try
-        {
-            var backup = await new ArkAsaBackupService().CreateBackupAsync(_profile, "Manual backup from ARK settings page.");
-            Message = $"Backup created: {Path.GetFileName(backup.Path)}";
-        }
-        catch (Exception ex)
-        {
-            Message = $"Could not create backup: {ex.Message}";
-        }
-    }
-
     private void ImportIni(ref ArkSurvivalAscendedServerProfile _, bool isGameIni)
     {
         var dialog = new OpenFileDialog
@@ -1454,6 +1575,243 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
 
         if (dialog.ShowDialog() == true)
             InstallPath = dialog.FolderName;
+    }
+
+    // ── RCON Console Tab ─────────────────────────────────────────────────────
+
+    private async Task RefreshPlayersAsync()
+    {
+        if (_rconBusy) return;
+        _rconBusy = true;
+        RconStatusText = "Connecting...";
+        RconStatusColor = "#F59E0B";
+        try
+        {
+            using var rcon = new SourceRconClient();
+            var password = string.IsNullOrWhiteSpace(_profile.Network.RCONPassword)
+                ? _profile.Basic.AdminPassword
+                : _profile.Network.RCONPassword;
+            var connected = await rcon.ConnectAsync("127.0.0.1", _profile.Network.RCONPort, password);
+            if (!connected)
+            {
+                RconStatusText = "Auth failed — check RCON password";
+                RconStatusColor = "#EF4444";
+                return;
+            }
+            var response = await rcon.ExecAsync("listplayers");
+            RconStatusText = "Connected";
+            RconStatusColor = "#22C55E";
+            Players.Clear();
+            if (!string.IsNullOrWhiteSpace(response) &&
+                !response.Contains("No Players", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var line in response.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var m = Regex.Match(line.Trim(), @"^\d+\.\s+(.+),\s+(\d+)\s*$");
+                    if (m.Success)
+                        Players.Add(new ArkRconPlayerItem { Name = m.Groups[1].Value.Trim(), SteamId = m.Groups[2].Value.Trim() });
+                }
+            }
+            OnPropertyChanged(nameof(PlayerCountText));
+            OnPropertyChanged(nameof(HasPlayers));
+            OnPropertyChanged(nameof(NoPlayers));
+        }
+        catch (Exception ex)
+        {
+            RconStatusText = $"Error: {ex.Message.Split('\n')[0]}";
+            RconStatusColor = "#EF4444";
+        }
+        finally
+        {
+            _rconBusy = false;
+        }
+    }
+
+    private async Task TestRconConnectionAsync()
+    {
+        if (_rconBusy) return;
+        _rconBusy = true;
+        RconStatusText = "Testing...";
+        RconStatusColor = "#F59E0B";
+        try
+        {
+            using var rcon = new SourceRconClient();
+            var password = string.IsNullOrWhiteSpace(_profile.Network.RCONPassword)
+                ? _profile.Basic.AdminPassword
+                : _profile.Network.RCONPassword;
+            var connected = await rcon.ConnectAsync("127.0.0.1", _profile.Network.RCONPort, password);
+            RconStatusText = connected ? "Connection OK" : "Auth failed — check RCON password";
+            RconStatusColor = connected ? "#22C55E" : "#EF4444";
+        }
+        catch (Exception ex)
+        {
+            RconStatusText = $"Unreachable: {ex.Message.Split('\n')[0]}";
+            RconStatusColor = "#EF4444";
+        }
+        finally
+        {
+            _rconBusy = false;
+        }
+    }
+
+    private async Task SendRconAsync(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command)) return;
+        RconCommandResult = string.Empty;
+        RconStatusText = "Sending...";
+        RconStatusColor = "#F59E0B";
+        try
+        {
+            using var rcon = new SourceRconClient();
+            var password = string.IsNullOrWhiteSpace(_profile.Network.RCONPassword)
+                ? _profile.Basic.AdminPassword
+                : _profile.Network.RCONPassword;
+            var connected = await rcon.ConnectAsync("127.0.0.1", _profile.Network.RCONPort, password);
+            if (!connected)
+            {
+                RconStatusText = "Auth failed";
+                RconStatusColor = "#EF4444";
+                return;
+            }
+            var result = await rcon.ExecAsync(command);
+            RconCommandResult = string.IsNullOrWhiteSpace(result) ? "Command sent." : result.Trim();
+            RconStatusText = "Connected";
+            RconStatusColor = "#22C55E";
+            if (command.StartsWith("listplayers", StringComparison.OrdinalIgnoreCase))
+                await RefreshPlayersAsync();
+        }
+        catch (Exception ex)
+        {
+            RconStatusText = $"Error: {ex.Message.Split('\n')[0]}";
+            RconStatusColor = "#EF4444";
+        }
+    }
+
+    private void OpenInConsole()
+    {
+        if (Application.Current.MainWindow is Shell shell)
+            shell.NavigateToConsolePage();
+    }
+
+    // ── Backups Tab ──────────────────────────────────────────────────────────
+
+    private async Task RefreshBackupsAsync()
+    {
+        if (_backupsBusy) return;
+        _backupsBusy = true;
+        try
+        {
+            var folder = _profile.Paths.BackupPath;
+            Backups.Clear();
+            if (!Directory.Exists(folder))
+            {
+                OnPropertyChanged(nameof(HasBackups));
+                OnPropertyChanged(nameof(BackupFolderPath));
+                return;
+            }
+            var files = await Task.Run(() =>
+                Directory.GetFiles(folder, "*.zip")
+                    .Select(path => new FileInfo(path))
+                    .OrderByDescending(f => f.LastWriteTimeUtc)
+                    .ToArray());
+            foreach (var f in files)
+            {
+                Backups.Add(new ArkBackupListItem
+                {
+                    FileName = f.Name,
+                    FilePath = f.FullName,
+                    CreatedAt = f.LastWriteTime,
+                    FileSizeBytes = f.Length
+                });
+            }
+            OnPropertyChanged(nameof(HasBackups));
+            OnPropertyChanged(nameof(HasNoBackups));
+            OnPropertyChanged(nameof(BackupFolderPath));
+        }
+        finally
+        {
+            _backupsBusy = false;
+        }
+    }
+
+    private async Task RestoreBackupAsync(ArkBackupListItem? item)
+    {
+        if (item == null) return;
+        var confirm = MessageBox.Show(
+            $"Restore '{item.ShortName}'?\n\nThis will overwrite your current SavedArks and config files. Make sure the server is stopped first.",
+            "Restore Backup",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        BackupStatusText = "Restoring...";
+        try
+        {
+            await Task.Run(() =>
+            {
+                using var zip = ZipFile.OpenRead(item.FilePath);
+                foreach (var entry in zip.Entries)
+                {
+                    string destPath;
+                    if (entry.FullName.StartsWith("SavedArks/", StringComparison.OrdinalIgnoreCase))
+                        destPath = Path.Combine(_profile.Paths.SavesPath, entry.FullName["SavedArks/".Length..].Replace('/', Path.DirectorySeparatorChar));
+                    else if (entry.FullName.StartsWith("Config/", StringComparison.OrdinalIgnoreCase))
+                        destPath = Path.Combine(_profile.Paths.ConfigPath, entry.FullName["Config/".Length..].Replace('/', Path.DirectorySeparatorChar));
+                    else if (entry.FullName.StartsWith("Cluster/", StringComparison.OrdinalIgnoreCase))
+                        destPath = Path.Combine(_profile.Paths.ClusterPath, entry.FullName["Cluster/".Length..].Replace('/', Path.DirectorySeparatorChar));
+                    else
+                        continue;
+                    if (string.IsNullOrEmpty(entry.Name)) continue; // directory entry
+                    Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
+                    entry.ExtractToFile(destPath, overwrite: true);
+                }
+            });
+            BackupStatusText = $"Restored: {item.ShortName}";
+            _ = LoadAsync(); // reload config from restored files
+        }
+        catch (Exception ex)
+        {
+            BackupStatusText = $"Restore failed: {ex.Message}";
+        }
+    }
+
+    private async Task DeleteBackupAsync(ArkBackupListItem? item)
+    {
+        if (item == null) return;
+        var confirm = MessageBox.Show(
+            $"Delete '{item.ShortName}'? This cannot be undone.",
+            "Delete Backup",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        try
+        {
+            await Task.Run(() => File.Delete(item.FilePath));
+            Backups.Remove(item);
+            if (SelectedBackup == item) SelectedBackup = null;
+            OnPropertyChanged(nameof(HasBackups));
+            OnPropertyChanged(nameof(HasNoBackups));
+            BackupStatusText = "Backup deleted.";
+        }
+        catch (Exception ex)
+        {
+            BackupStatusText = $"Delete failed: {ex.Message}";
+        }
+    }
+
+    private async Task CreateBackupAndRefreshAsync()
+    {
+        try
+        {
+            var backup = await new ArkAsaBackupService().CreateBackupAsync(_profile, "Manual backup from ARK settings page.");
+            Message = $"Backup created: {Path.GetFileName(backup.Path)}";
+            await RefreshBackupsAsync();
+        }
+        catch (Exception ex)
+        {
+            Message = $"Could not create backup: {ex.Message}";
+        }
     }
 }
 
@@ -1802,4 +2160,27 @@ internal static class ClipboardService
             // Clipboard can be temporarily locked by another process.
         }
     }
+}
+
+public sealed class ArkRconPlayerItem : BaseViewModel
+{
+    private string _name = string.Empty;
+    private string _steamId = string.Empty;
+
+    public string Name { get => _name; set => SetProperty(ref _name, value); }
+    public string SteamId { get => _steamId; set => SetProperty(ref _steamId, value); }
+    public string DisplayLine => !string.IsNullOrWhiteSpace(_name) ? $"{_name}  ·  {_steamId}" : _steamId;
+}
+
+public sealed class ArkBackupListItem
+{
+    public string FileName { get; set; } = string.Empty;
+    public string FilePath { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public long FileSizeBytes { get; set; }
+    public string SizeText => FileSizeBytes < 1024 * 1024
+        ? $"{FileSizeBytes / 1024.0:F1} KB"
+        : $"{FileSizeBytes / (1024.0 * 1024.0):F1} MB";
+    public string DateText => CreatedAt.ToString("yyyy-MM-dd HH:mm");
+    public string ShortName => Path.GetFileNameWithoutExtension(FileName);
 }

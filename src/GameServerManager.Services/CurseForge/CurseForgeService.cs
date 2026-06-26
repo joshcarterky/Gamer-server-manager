@@ -97,6 +97,33 @@ public sealed class CurseForgeService : IDisposable
         }
     }
 
+    public async Task<CurseForgeLookupResult> GetModByIdAsync(int modId, CancellationToken ct = default)
+    {
+        try
+        {
+            var response = await _http.GetFromJsonAsync<CfSingleResponse>($"mods/{modId}", JsonOpts, ct);
+            if (response?.Data is null)
+                return Fail(CurseForgeLookupStatus.NotFound, $"Mod {modId} not found.");
+            return new CurseForgeLookupResult { Status = CurseForgeLookupStatus.Success, Mod = MapMod(response.Data) };
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return Fail(CurseForgeLookupStatus.NotFound, $"Mod {modId} not found.");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+        {
+            return Fail(CurseForgeLookupStatus.Unauthorized, "API key rejected.");
+        }
+        catch (OperationCanceledException)
+        {
+            return Fail(CurseForgeLookupStatus.NetworkError, "Request timed out.");
+        }
+        catch (Exception ex)
+        {
+            return Fail(CurseForgeLookupStatus.NetworkError, ex.Message);
+        }
+    }
+
     public async Task<CurseForgeLookupResult> TestConnectionAsync(CancellationToken ct = default)
     {
         try

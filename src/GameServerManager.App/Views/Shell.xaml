@@ -10,7 +10,8 @@
         ResizeMode="CanResize"
         Icon="/Assets/AppIcon.ico"
         Background="Transparent"
-        AllowsTransparency="False">
+        AllowsTransparency="False"
+        KeyDown="OnShellKeyDown">
 
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="0"
@@ -177,6 +178,7 @@
                     <RowDefinition x:Name="HeaderRow" Height="58"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
+                    <RowDefinition Height="28"/>
                 </Grid.RowDefinitions>
 
                 <Border x:Name="HeaderPanel"
@@ -228,6 +230,25 @@
                 </Border>
 
                 <ContentControl Grid.Row="2" x:Name="MainContentArea"/>
+
+                <Border Grid.Row="3"
+                        Background="#55101E2E"
+                        BorderBrush="#1A3347"
+                        BorderThickness="0,1,0,0"
+                        Padding="16,0">
+                    <Grid>
+                        <TextBlock x:Name="StatusBarText"
+                                   Text="Loading..."
+                                   Foreground="#556070"
+                                   FontSize="11"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="Nexus Server Manager"
+                                   Foreground="#334050"
+                                   FontSize="11"
+                                   HorizontalAlignment="Right"
+                                   VerticalAlignment="Center"/>
+                    </Grid>
+                </Border>
             </Grid>
         </Grid>
     </Border>

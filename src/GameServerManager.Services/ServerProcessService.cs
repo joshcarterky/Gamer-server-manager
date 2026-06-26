@@ -9,6 +9,9 @@ public class ServerProcessService : IDisposable
     private readonly GameProviderRegistry _providers;
     private readonly AppDataPaths _paths;
     private readonly Dictionary<string, Process> _runningProcesses = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _intentionallyStopped = new(StringComparer.OrdinalIgnoreCase);
+
+    public event EventHandler<ServerProfile>? ServerCrashed;
 
     public ServerProcessService(GameProviderRegistry providers, AppDataPaths paths)
     {
@@ -56,7 +59,13 @@ public class ServerProcessService : IDisposable
 
         process.OutputDataReceived += (_, e) => AppendLog(logPath, e.Data);
         process.ErrorDataReceived += (_, e) => AppendLog(logPath, e.Data == null ? null : $"[ERR] {e.Data}");
-        process.Exited += (_, _) => _runningProcesses.Remove(profile.Id);
+        process.Exited += (_, _) =>
+        {
+            _runningProcesses.Remove(profile.Id);
+            var wasStopped = _intentionallyStopped.Remove(profile.Id);
+            if (!wasStopped)
+                ServerCrashed?.Invoke(this, profile);
+        };
 
         process.Start();
         process.BeginOutputReadLine();
@@ -75,6 +84,8 @@ public class ServerProcessService : IDisposable
         {
             return;
         }
+
+        _intentionallyStopped.Add(profile.Id);
 
         if (!process.HasExited)
         {

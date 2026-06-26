@@ -86,6 +86,38 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="18">
+
+            <!-- ═══ EMPTY STATE WELCOME CARD ═══ -->
+            <Border Visibility="{Binding IsEmpty, Converter={StaticResource BooleanToVisibilityConverter}}"
+                    Background="#B6203147" BorderBrush="#48647D" BorderThickness="1"
+                    CornerRadius="8" Padding="28,24" Margin="5,0,5,16">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Welcome to Nexus Server Manager"
+                                   Foreground="White" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                        <TextBlock Text="No server profiles found. Deploy a game server to get started, or import an existing installation."
+                                   Foreground="#A8B7C8" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,18" MaxWidth="500"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="Deploy Server" Style="{StaticResource ActionButton}"
+                                    Background="#1B5D9A" BorderBrush="#2F84D8"
+                                    Margin="0" Padding="16,8" Click="OnDeployClick"/>
+                            <Button Content="Import Server" Style="{StaticResource ActionButton}"
+                                    Margin="8,0,0,0" Padding="16,8" Click="OnImportClick"/>
+                        </StackPanel>
+                    </StackPanel>
+                    <Border Grid.Column="1" Width="72" Height="72" CornerRadius="36"
+                            Background="#1A2A3E" BorderBrush="#2E4860" BorderThickness="2"
+                            Margin="24,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="GS" Foreground="#4AA8FF" FontSize="22" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </Grid>
+            </Border>
+
             <Grid Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -315,9 +347,15 @@
             <Border Style="{StaticResource CardStyle}" Margin="5,5,5,0">
                 <StackPanel>
                     <DockPanel Margin="0,0,0,8">
-                        <TextBlock Text="Server Profiles" Foreground="White" FontSize="15" FontWeight="SemiBold"/>
-                        <TextBlock Text="{Binding OfflineCount, StringFormat=Offline: {0}}"
-                                   Foreground="#FA6D72" DockPanel.Dock="Right" HorizontalAlignment="Right"/>
+                        <TextBlock Text="Server Profiles" Foreground="White" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <TextBlock Text="{Binding OfflineCount, StringFormat=Offline: {0}}"
+                                       Foreground="#FA6D72" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <Button Content="Start All" Style="{StaticResource ActionButton}"
+                                    Command="{Binding StartAllCommand}" Padding="10,5" Margin="0,0,4,0"/>
+                            <Button Content="Stop All" Style="{StaticResource ActionButton}"
+                                    Command="{Binding StopAllCommand}" Padding="10,5"/>
+                        </StackPanel>
                     </DockPanel>
 
                     <ItemsControl ItemsSource="{Binding Servers}">
@@ -325,6 +363,18 @@
                             <DataTemplate>
                                 <Border Background="#3A162438" BorderBrush="#425B72" BorderThickness="1"
                                         CornerRadius="6" Padding="10" Margin="0,0,0,8">
+                                    <Border.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Start" Click="OnContextStartClick"/>
+                                            <MenuItem Header="Stop" Click="OnContextStopClick"/>
+                                            <MenuItem Header="Restart" Click="OnContextRestartClick"/>
+                                            <Separator/>
+                                            <MenuItem Header="Toggle Auto-Restart on Crash" Click="OnContextToggleAutoRestartClick"/>
+                                            <Separator/>
+                                            <MenuItem Header="Open Settings" Click="OnContextOpenSettingsClick"/>
+                                            <MenuItem Header="Open Console" Click="OnContextOpenConsoleClick"/>
+                                        </ContextMenu>
+                                    </Border.ContextMenu>
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
