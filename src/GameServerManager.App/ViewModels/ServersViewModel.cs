@@ -950,24 +950,19 @@ public class ServersViewModel : BaseViewModel, IDisposable
             return;
         }
 
+        var shell = Application.Current.Windows.OfType<Shell>().FirstOrDefault();
+        if (shell == null) return;
+
         if (server.Profile.GameId.Equals(ArkSurvivalAscendedServerProfile.GameId, StringComparison.OrdinalIgnoreCase) ||
             server.Profile.GameId.Equals(ArkSurvivalAscendedServerProfile.LegacyGameId, StringComparison.OrdinalIgnoreCase))
         {
-            var shell = Application.Current.Windows.OfType<Shell>().FirstOrDefault();
-            if (shell != null)
-            {
-                shell.OpenArkAsaSettings(server.Profile);
-                Message = $"Opened ARK ASA settings for {server.ServerName}.";
-                return;
-            }
+            shell.OpenArkAsaSettings(server.Profile);
+            Message = $"Opened ARK ASA settings for {server.ServerName}.";
+            return;
         }
 
-        MessageBox.Show(
-            "Not implemented yet: per-server settings will open the generated settings editor for this profile.",
-            "Server Settings",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
-        Message = $"Per-server settings are not implemented yet for {server.ServerName}.";
+        shell.OpenGenericSettings(server.Profile);
+        Message = $"Opened settings for {server.ServerName}.";
     }
 
     private void MoreOptions(ServerCardViewModel? server)

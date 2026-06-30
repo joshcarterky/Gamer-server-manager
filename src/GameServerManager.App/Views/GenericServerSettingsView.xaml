@@ -1,0 +1,324 @@
+<UserControl x:Class="GameServerManager.App.Views.GenericServerSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:GameServerManager.App.ViewModels"
+             Background="Transparent">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- ══ Shared styles (matching app dark theme) ═══════════════════════ -->
+        <Style x:Key="Input" TargetType="TextBox">
+            <Setter Property="Foreground"       Value="#F1F5F9"/>
+            <Setter Property="Background"       Value="#06101A"/>
+            <Setter Property="CaretBrush"       Value="#F1F5F9"/>
+            <Setter Property="BorderBrush"      Value="#1E3349"/>
+            <Setter Property="BorderThickness"  Value="1"/>
+            <Setter Property="Padding"          Value="9,7"/>
+        </Style>
+
+        <Style x:Key="ActionButton" TargetType="Button">
+            <Setter Property="Foreground"       Value="#94A3B8"/>
+            <Setter Property="Background"       Value="Transparent"/>
+            <Setter Property="BorderBrush"      Value="#1E3349"/>
+            <Setter Property="BorderThickness"  Value="1"/>
+            <Setter Property="Padding"          Value="12,7"/>
+            <Setter Property="FontSize"         Value="12"/>
+            <Setter Property="Cursor"           Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="7" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#142A40"/>
+                                <Setter Property="Foreground" Value="#F1F5F9"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Opacity" Value="0.7"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
+            <Setter Property="Background"  Value="#2563EB"/>
+            <Setter Property="BorderBrush" Value="#3B82F6"/>
+            <Setter Property="Foreground"  Value="White"/>
+            <Setter Property="FontWeight"  Value="SemiBold"/>
+        </Style>
+
+        <Style x:Key="CategoryButton" TargetType="ListBoxItem">
+            <Setter Property="Foreground"       Value="#8BA3B8"/>
+            <Setter Property="Background"       Value="Transparent"/>
+            <Setter Property="BorderThickness"  Value="0"/>
+            <Setter Property="Padding"          Value="14,8"/>
+            <Setter Property="Margin"           Value="0,1"/>
+            <Setter Property="Cursor"           Value="Hand"/>
+            <Setter Property="FontSize"         Value="12"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#0D1E2E"/>
+                                <Setter Property="Foreground" Value="#CBD5E1"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#132033"/>
+                                <Setter Property="Foreground" Value="#F1F5F9"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Dropdown style matching ArkAsaSettingsView -->
+        <Style x:Key="ComboInput" TargetType="ComboBox">
+            <Setter Property="Foreground"       Value="#F1F5F9"/>
+            <Setter Property="Background"       Value="#06101A"/>
+            <Setter Property="BorderBrush"      Value="#1E3349"/>
+            <Setter Property="BorderThickness"  Value="1"/>
+            <Setter Property="Padding"          Value="8,6"/>
+            <Setter Property="MinHeight"        Value="34"/>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ComboBoxItem">
+                        <Setter Property="Background" Value="#06101A"/>
+                        <Setter Property="Foreground" Value="#F1F5F9"/>
+                        <Setter Property="Padding"    Value="10,7"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ComboBoxItem">
+                                    <Border x:Name="Bd" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter TextElement.Foreground="#F1F5F9"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsHighlighted" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#142A40"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#2563EB"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton Focusable="False"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          ClickMode="Press">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Chrome" Background="#06101A" BorderBrush="#1E3349"
+                                                BorderThickness="1" CornerRadius="6">
+                                            <Grid>
+                                                <ContentPresenter Margin="10,0,30,0"
+                                                                  TextElement.Foreground="#F1F5F9"
+                                                                  VerticalAlignment="Center"
+                                                                  HorizontalAlignment="Left"
+                                                                  Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                                  ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
+                                                <Path Data="M 0 0 L 4 4 L 8 0 Z" Fill="#7A94B0"
+                                                      Width="8" Height="4"
+                                                      HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#2A4A62"/>
+                                                <Setter TargetName="Chrome" Property="Background" Value="#0D1826"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <Popup x:Name="PART_Popup" AllowsTransparency="True" Focusable="False"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" PopupAnimation="Fade">
+                                <Border Background="#06101A" BorderBrush="#1E3349" BorderThickness="1" CornerRadius="4"
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <ScrollViewer MaxHeight="260">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ══ Setting item DataTemplate ════════════════════════════════════ -->
+        <DataTemplate DataType="{x:Type vm:GenericSettingItemViewModel}">
+            <Border Background="#AA0D1826" BorderBrush="#1A3249" BorderThickness="1"
+                    CornerRadius="8" Padding="14,11" Margin="0,0,0,6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Label -->
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                        <TextBlock Text="{Binding DisplayName}"
+                                   Foreground="#CBD5E1" FontSize="13" FontWeight="Medium"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding Key}" Foreground="#3D5A74" FontSize="10"
+                                   Margin="0,2,0,0"/>
+                    </StackPanel>
+
+                    <!-- Controls column -->
+                    <Grid Grid.Column="1">
+
+                        <!-- Plain text -->
+                        <TextBox Visibility="{Binding IsText, Converter={StaticResource BoolToVis}}"
+                                 Style="{StaticResource Input}"
+                                 Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <!-- Password (rendered as text — server admin tool) -->
+                        <TextBox Visibility="{Binding IsPassword, Converter={StaticResource BoolToVis}}"
+                                 Style="{StaticResource Input}"
+                                 Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <!-- Number -->
+                        <TextBox Visibility="{Binding IsNumber, Converter={StaticResource BoolToVis}}"
+                                 Style="{StaticResource Input}"
+                                 Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <!-- Toggle -->
+                        <CheckBox Visibility="{Binding IsToggle, Converter={StaticResource BoolToVis}}"
+                                  IsChecked="{Binding BooleanValue}"
+                                  VerticalAlignment="Center"
+                                  Foreground="#94A3B8" Margin="2,0"/>
+
+                        <!-- Dropdown -->
+                        <ComboBox Visibility="{Binding IsDropdown, Converter={StaticResource BoolToVis}}"
+                                  Style="{StaticResource ComboInput}"
+                                  ItemsSource="{Binding ParsedOptions}"
+                                  DisplayMemberPath="Label"
+                                  SelectedItem="{Binding SelectedOption}"/>
+
+                        <!-- Folder picker -->
+                        <DockPanel Visibility="{Binding IsFolderPicker, Converter={StaticResource BoolToVis}}">
+                            <Button DockPanel.Dock="Right"
+                                    Content="Browse"
+                                    Style="{StaticResource ActionButton}"
+                                    Command="{Binding BrowseCommand}"
+                                    Margin="6,0,0,0" Padding="10,7"/>
+                            <TextBox Style="{StaticResource Input}"
+                                     Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"/>
+                        </DockPanel>
+
+                        <!-- Modified indicator -->
+                        <Border Width="4" HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                                Background="#F59E0B" CornerRadius="2" Margin="0,0,-10,0"
+                                Visibility="{Binding IsModified, Converter={StaticResource BoolToVis}}"/>
+                    </Grid>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="200"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ══ Category sidebar ═══════════════════════════════════════════════ -->
+        <Border Grid.Column="0" Background="#0A1522" Margin="12,12,0,12" CornerRadius="10">
+            <DockPanel Margin="10,14,10,10">
+
+                <!-- Header -->
+                <TextBlock DockPanel.Dock="Top"
+                           Text="CATEGORIES"
+                           Foreground="#3D5A74" FontSize="10" FontWeight="SemiBold"
+                           Margin="4,0,0,10"/>
+
+                <!-- Category list -->
+                <ListBox ItemsSource="{Binding Categories}"
+                         SelectedItem="{Binding SelectedCategory, Mode=TwoWay}"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ItemContainerStyle="{StaticResource CategoryButton}"/>
+            </DockPanel>
+        </Border>
+
+        <!-- ══ Main settings area ════════════════════════════════════════════ -->
+        <Grid Grid.Column="1" Margin="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <DockPanel Grid.Row="0" Margin="0,0,0,12">
+                <StackPanel DockPanel.Dock="Left">
+                    <TextBlock Text="{Binding ServerName}"
+                               Foreground="#F1F5F9" FontSize="18" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding GameName}"
+                               Foreground="#3D8FCC" FontSize="12" Margin="0,2,0,0"/>
+                </StackPanel>
+
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Revert"
+                            Style="{StaticResource ActionButton}"
+                            Command="{Binding RevertCommand}"
+                            Margin="0,0,8,0"/>
+                    <Button Content="Save Settings"
+                            Style="{StaticResource PrimaryButton}"
+                            Command="{Binding SaveCommand}"/>
+                </StackPanel>
+
+                <Border/>
+            </DockPanel>
+
+            <!-- Search -->
+            <TextBox Grid.Row="1"
+                     Style="{StaticResource Input}"
+                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                     Margin="0,0,0,10">
+                <TextBox.Resources>
+                    <Style TargetType="Border">
+                        <Setter Property="CornerRadius" Value="6"/>
+                    </Style>
+                </TextBox.Resources>
+            </TextBox>
+
+            <!-- Settings list -->
+            <ScrollViewer Grid.Row="2"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding FilteredSettings}" Margin="0,0,4,0"/>
+            </ScrollViewer>
+
+            <!-- Status bar -->
+            <Border Grid.Row="3" Margin="0,8,0,0"
+                    Visibility="{Binding HasMessage, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="{Binding Message}"
+                           Foreground="#64B5F6" FontSize="12"/>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -335,6 +335,24 @@ namespace GameServerManager.App.Views
             }
         }
 
+        public void OpenGenericSettings(ServerProfile profile)
+        {
+            var registry = GameServerManager.GameProviders.GameProviderRegistry.CreateDefault();
+            if (!registry.TryGetProvider(profile.GameId, out var provider) || !provider.SettingsDefinitions.Any())
+            {
+                System.Windows.MessageBox.Show(
+                    $"No configurable settings are defined for {profile.GameId}.",
+                    "Settings",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Information);
+                return;
+            }
+
+            PageTitleText.Text = $"{provider.GameName} Settings";
+            SetActiveButton(ServersButton);
+            MainContentArea.Content = new GenericServerSettingsView(profile, provider);
+        }
+
         private void SetActiveButton(Button activeButton)
         {
             foreach (var button in new[]
