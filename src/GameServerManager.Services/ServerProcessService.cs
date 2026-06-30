@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.IO;
 using GameServerManager.Core.Models;
 using GameServerManager.GameProviders;
+using GameServerManager.Services.SevenDaysToDie;
 
 namespace GameServerManager.Services;
 
@@ -29,6 +31,18 @@ public class ServerProcessService : IDisposable
 
         var provider = _providers.GetProvider(profile.GameId);
         MemorySettingsPolicy.ApplyProfileMigration(profile, provider, out _);
+
+        // For 7 Days to Die, sync profile settings to serverconfig.xml before launch
+        // so that UI-saved settings are always applied to the actual game config.
+        if (profile.GameId.Equals("seven_days_to_die", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(profile.InstallPath))
+        {
+            var configPath = Path.Combine(profile.InstallPath, "serverconfig.xml");
+            var configService = new SevenDaysToDieConfigService();
+            await SevenDaysToDieConfigService.EnsureConfigExistsAsync(configPath, profile.ServerName);
+            await configService.SaveAsync(profile, configPath, createBackup: false);
+        }
+
         var command = provider.BuildStartCommand(profile);
         if (!command.IsValid)
         {

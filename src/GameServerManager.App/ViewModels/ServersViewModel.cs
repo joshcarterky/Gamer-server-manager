@@ -961,6 +961,13 @@ public class ServersViewModel : BaseViewModel, IDisposable
             return;
         }
 
+        if (server.Profile.GameId.Equals(GameServerManager.GameProviders.SevenDaysToDieProvider.GameIdConst, StringComparison.OrdinalIgnoreCase))
+        {
+            shell.OpenSevenDaysToDieSettings(server.Profile);
+            Message = $"Opened 7 Days to Die settings for {server.ServerName}.";
+            return;
+        }
+
         shell.OpenGenericSettings(server.Profile);
         Message = $"Opened settings for {server.ServerName}.";
     }

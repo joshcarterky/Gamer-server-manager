@@ -335,6 +335,17 @@ namespace GameServerManager.App.Views
             }
         }
 
+        public void OpenSevenDaysToDieSettings(ServerProfile profile)
+        {
+            var registry = GameServerManager.GameProviders.GameProviderRegistry.CreateDefault();
+            if (!registry.TryGetProvider(profile.GameId, out var provider))
+                return;
+
+            PageTitleText.Text = "7 Days to Die Settings";
+            SetActiveButton(ServersButton);
+            MainContentArea.Content = new SevenDaysToDieSettingsView(profile, provider);
+        }
+
         public void OpenGenericSettings(ServerProfile profile)
         {
             var registry = GameServerManager.GameProviders.GameProviderRegistry.CreateDefault();

@@ -84,6 +84,36 @@ public class ServerSettingDefinition
     /// Whether this setting requires a server restart
     /// </summary>
     public bool RequiresRestart { get; set; } = false;
+
+    /// <summary>
+    /// Extended technical explanation shown in the help tooltip.
+    /// </summary>
+    public string? HelpText { get; set; }
+
+    /// <summary>
+    /// Unit or suffix displayed after a numeric value (e.g. "players", "KiB/s", "days").
+    /// </summary>
+    public string? Unit { get; set; }
+
+    /// <summary>
+    /// Placeholder text displayed in the input control when empty.
+    /// </summary>
+    public string? Placeholder { get; set; }
+
+    /// <summary>
+    /// Whether this setting is deprecated (superseded by another setting).
+    /// </summary>
+    public bool IsDeprecated { get; set; } = false;
+
+    /// <summary>
+    /// The key of the setting that replaced this one, if deprecated.
+    /// </summary>
+    public string? ReplacementKey { get; set; }
+
+    /// <summary>
+    /// Recommended value note shown in the UI (e.g. "≤ 8 for crossplay").
+    /// </summary>
+    public string? RecommendedValue { get; set; }
 }
 
 /// <summary>

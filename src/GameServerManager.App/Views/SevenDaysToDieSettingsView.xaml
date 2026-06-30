@@ -1,0 +1,790 @@
+<UserControl x:Class="GameServerManager.App.Views.SevenDaysToDieSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:GameServerManager.App.ViewModels"
+             Background="Transparent">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- Inverse bool→vis: true→Collapsed, false→Visible -->
+        <vm:InverseBoolToVisibilityConverter x:Key="InvBoolToVis"/>
+
+        <!-- ══ Color palette (dark professional) ════════════════════════════════ -->
+        <!-- Base: #070F1A  Surface: #0D1826  Elevated: #142234  Border: #1C3349 -->
+        <!-- Text-primary: #F1F5F9  Text-secondary: #94A3B8  Text-muted: #4B6280 -->
+        <!-- Accent-blue: #2563EB  Accent-light: #60A5FA                          -->
+        <!-- Green: #22C55E  Amber: #F59E0B  Red: #EF4444                         -->
+
+        <!-- ══ Shared input styles ════════════════════════════════════════════ -->
+        <Style x:Key="DarkInput" TargetType="TextBox">
+            <Setter Property="Foreground"      Value="#F1F5F9"/>
+            <Setter Property="Background"      Value="#070F1A"/>
+            <Setter Property="CaretBrush"      Value="#60A5FA"/>
+            <Setter Property="BorderBrush"     Value="#1C3349"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"         Value="9,7"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsFocused" Value="True">
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="#2563EB"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="#2A4A62"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkPasswordBox" TargetType="PasswordBox">
+            <Setter Property="Foreground"      Value="#F1F5F9"/>
+            <Setter Property="Background"      Value="#070F1A"/>
+            <Setter Property="CaretBrush"      Value="#60A5FA"/>
+            <Setter Property="BorderBrush"     Value="#1C3349"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"         Value="9,7"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="PasswordBox">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsFocused" Value="True">
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="#2563EB"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Toggle switch style -->
+        <Style x:Key="ToggleSwitch" TargetType="CheckBox">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border x:Name="Track" Width="42" Height="22" CornerRadius="11"
+                                    Background="#1C3349" BorderBrush="#2A4A62" BorderThickness="1">
+                                <Ellipse x:Name="Thumb" Width="16" Height="16"
+                                         Fill="#4B6280" VerticalAlignment="Center"
+                                         HorizontalAlignment="Left" Margin="2,0,0,0"/>
+                            </Border>
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Track" Property="Background" Value="#1D4ED8"/>
+                                <Setter TargetName="Track" Property="BorderBrush" Value="#2563EB"/>
+                                <Setter TargetName="Thumb" Property="Fill" Value="White"/>
+                                <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right"/>
+                                <Setter TargetName="Thumb" Property="Margin" Value="0,0,2,0"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Track" Property="BorderBrush" Value="#3B82F6"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ComboBox -->
+        <Style x:Key="DarkCombo" TargetType="ComboBox">
+            <Setter Property="Foreground"     Value="#F1F5F9"/>
+            <Setter Property="Background"     Value="#070F1A"/>
+            <Setter Property="BorderBrush"    Value="#1C3349"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"        Value="8,6"/>
+            <Setter Property="MinHeight"      Value="34"/>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ComboBoxItem">
+                        <Setter Property="Background" Value="#0D1826"/>
+                        <Setter Property="Foreground" Value="#F1F5F9"/>
+                        <Setter Property="Padding"    Value="10,7"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ComboBoxItem">
+                                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter TextElement.Foreground="#F1F5F9"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsHighlighted" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#142234"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#1D3A6E"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton Focusable="False"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          ClickMode="Press">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Ch" Background="#070F1A" BorderBrush="#1C3349"
+                                                BorderThickness="1" CornerRadius="6" MinHeight="34">
+                                            <Grid>
+                                                <ContentPresenter Margin="10,0,30,0"
+                                                                  TextElement.Foreground="#F1F5F9"
+                                                                  VerticalAlignment="Center"
+                                                                  Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                                  ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
+                                                <Path Data="M 0 0 L 4 4 L 8 0 Z" Fill="#60A5FA"
+                                                      Width="8" Height="4"
+                                                      HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                      Margin="0,0,12,0"/>
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Ch" Property="BorderBrush" Value="#2563EB"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <Popup x:Name="PART_Popup" AllowsTransparency="True" Focusable="False"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom">
+                                <Border Background="#0D1826" BorderBrush="#1C3349" BorderThickness="1"
+                                        CornerRadius="4"
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <ScrollViewer MaxHeight="260">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Icon button (copy, browse, etc.) -->
+        <Style x:Key="IconButton" TargetType="Button">
+            <Setter Property="Foreground"       Value="#60A5FA"/>
+            <Setter Property="Background"       Value="Transparent"/>
+            <Setter Property="BorderThickness"  Value="0"/>
+            <Setter Property="Padding"          Value="8,5"/>
+            <Setter Property="FontSize"         Value="11"/>
+            <Setter Property="Cursor"           Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
+                                CornerRadius="5" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#0D1826"/>
+                                <Setter Property="Foreground" Value="#93C5FD"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Opacity" Value="0.75"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Primary action button (Save) -->
+        <Style x:Key="PrimaryBtn" TargetType="Button">
+            <Setter Property="Background"   Value="#2563EB"/>
+            <Setter Property="BorderBrush"  Value="#3B82F6"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground"   Value="White"/>
+            <Setter Property="FontWeight"   Value="SemiBold"/>
+            <Setter Property="FontSize"     Value="13"/>
+            <Setter Property="Padding"      Value="16,8"/>
+            <Setter Property="Cursor"       Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="7" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#1D4ED8"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bg" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Ghost action button (Discard, Reload) -->
+        <Style x:Key="GhostBtn" TargetType="Button">
+            <Setter Property="Background"   Value="Transparent"/>
+            <Setter Property="BorderBrush"  Value="#1C3349"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground"   Value="#94A3B8"/>
+            <Setter Property="FontSize"     Value="13"/>
+            <Setter Property="Padding"      Value="14,7"/>
+            <Setter Property="Cursor"       Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="7" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#0D1826"/>
+                                <Setter Property="Foreground" Value="#F1F5F9"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bg" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Category sidebar item -->
+        <Style x:Key="CatItem" TargetType="ListBoxItem">
+            <Setter Property="Foreground"      Value="#7A94B0"/>
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding"         Value="12,8"/>
+            <Setter Property="Margin"          Value="0,1"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="FontSize"        Value="12.5"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="7" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#0D1826"/>
+                                <Setter Property="Foreground" Value="#CBD5E1"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#142234"/>
+                                <Setter Property="Foreground" Value="#F1F5F9"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ══ Setting card DataTemplate ═══════════════════════════════════════ -->
+        <DataTemplate DataType="{x:Type vm:DtdSettingItemViewModel}">
+            <Border x:Name="Card" Background="#0D1826" BorderBrush="#1A2F44" BorderThickness="1"
+                    CornerRadius="8" Padding="16,12" Margin="0,0,0,6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="230"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Label column -->
+                    <StackPanel Grid.Column="0" VerticalAlignment="Top" Margin="0,0,16,0">
+                        <!-- Name + restart badge -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                            <TextBlock Text="{Binding DisplayName}" Foreground="#E2E8F0"
+                                       FontSize="13" FontWeight="Medium" TextWrapping="Wrap"/>
+                            <Border Background="#0F2640" CornerRadius="3" Padding="5,1" Margin="6,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding RequiresRestart, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="RESTART" Foreground="#F59E0B" FontSize="9" FontWeight="SemiBold"/>
+                            </Border>
+                        </StackPanel>
+                        <!-- XML key -->
+                        <TextBlock Text="{Binding Key}" Foreground="#3D5A74" FontSize="10.5" Margin="0,0,0,4"/>
+                        <!-- Description -->
+                        <TextBlock Text="{Binding Description}" Foreground="#7A94B0" FontSize="12"
+                                   TextWrapping="Wrap" LineHeight="17"
+                                   Visibility="{Binding HasDescription, Converter={StaticResource BoolToVis}}"/>
+                        <!-- Recommended value -->
+                        <StackPanel Orientation="Horizontal" Margin="0,5,0,0"
+                                    Visibility="{Binding HasRecommendedValue, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="✓ " Foreground="#22C55E" FontSize="11"/>
+                            <TextBlock Text="{Binding RecommendedValue}" Foreground="#4B8A5A"
+                                       FontSize="11" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Control column -->
+                    <Grid Grid.Column="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Input controls (stacked, only one Visible at a time) -->
+                        <Grid Grid.Row="0">
+                            <!-- Text -->
+                            <TextBox Visibility="{Binding IsText, Converter={StaticResource BoolToVis}}"
+                                     Style="{StaticResource DarkInput}"
+                                     Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                     Tag="{Binding Placeholder}"/>
+
+                            <!-- Password — code-behind syncs PasswordBox ↔ ViewModel -->
+                            <Grid Visibility="{Binding IsPassword, Converter={StaticResource BoolToVis}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <PasswordBox x:Name="PwBox" Grid.Column="0"
+                                             Style="{StaticResource DarkPasswordBox}"
+                                             Tag="{Binding Key}"/>
+                                <Button Grid.Column="1" Content="Show" Style="{StaticResource IconButton}"
+                                        Margin="6,0,0,0" Tag="{Binding Key}"
+                                        x:Name="ShowPasswordBtn"/>
+                            </Grid>
+
+                            <!-- Number -->
+                            <Grid Visibility="{Binding IsNumber, Converter={StaticResource BoolToVis}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" Style="{StaticResource DarkInput}"
+                                         Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding Unit}"
+                                           Foreground="#4B6280" FontSize="12"
+                                           VerticalAlignment="Center" Margin="8,0,0,0"
+                                           Visibility="{Binding HasUnit, Converter={StaticResource BoolToVis}}"/>
+                            </Grid>
+
+                            <!-- Toggle -->
+                            <StackPanel Visibility="{Binding IsToggle, Converter={StaticResource BoolToVis}}"
+                                        Orientation="Horizontal" VerticalAlignment="Center">
+                                <CheckBox Style="{StaticResource ToggleSwitch}"
+                                          IsChecked="{Binding BooleanValue, Mode=TwoWay}"/>
+                                <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" FontSize="13"
+                                           Foreground="#94A3B8">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="Disabled"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding BooleanValue}" Value="True">
+                                                    <Setter Property="Text" Value="Enabled"/>
+                                                    <Setter Property="Foreground" Value="#22C55E"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+
+                            <!-- Dropdown -->
+                            <ComboBox Visibility="{Binding IsDropdown, Converter={StaticResource BoolToVis}}"
+                                      Style="{StaticResource DarkCombo}"
+                                      ItemsSource="{Binding ParsedOptions}"
+                                      DisplayMemberPath="Label"
+                                      SelectedValuePath="Value"
+                                      SelectedValue="{Binding Value, Mode=TwoWay}"/>
+
+                            <!-- Folder picker -->
+                            <Grid Visibility="{Binding IsFolderPicker, Converter={StaticResource BoolToVis}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" Style="{StaticResource DarkInput}"
+                                         Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                <Button Grid.Column="1" Content="Browse…"
+                                        Style="{StaticResource GhostBtn}"
+                                        Margin="6,0,0,0" Padding="10,6"
+                                        Command="{Binding BrowseCommand}"/>
+                            </Grid>
+                        </Grid>
+
+                        <!-- Validation error / warning -->
+                        <Border Grid.Row="1" Background="#1A0808" BorderBrush="#7F1D1D"
+                                BorderThickness="1" CornerRadius="5" Padding="8,5" Margin="0,6,0,0"
+                                Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⚠ " Foreground="#EF4444" FontSize="12"/>
+                                <TextBlock Text="{Binding ValidationError}" Foreground="#FCA5A5"
+                                           FontSize="12" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Row="2" Background="#0F1A00" BorderBrush="#365314"
+                                BorderThickness="1" CornerRadius="5" Padding="8,5" Margin="0,4,0,0"
+                                Visibility="{Binding HasWarning, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⚑ " Foreground="#F59E0B" FontSize="12"/>
+                                <TextBlock Text="{Binding ValidationWarning}" Foreground="#FCD34D"
+                                           FontSize="12" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <!-- Modified indicator bar (right edge) -->
+                    <Border Grid.Column="1" Width="3" HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                            Background="#2563EB" CornerRadius="2" Margin="0,0,-12,0"
+                            Visibility="{Binding IsModified, Converter={StaticResource BoolToVis}}"/>
+                </Grid>
+            </Border>
+
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding HasError}" Value="True">
+                    <Setter TargetName="Card" Property="BorderBrush" Value="#7F1D1D"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding HasWarning}" Value="True">
+                    <Setter TargetName="Card" Property="BorderBrush" Value="#78350F"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- Category list item template (with badges) -->
+        <DataTemplate DataType="{x:Type vm:DtdCategoryViewModel}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="{Binding Name}" VerticalAlignment="Center"/>
+                <!-- Error badge -->
+                <Border Grid.Column="1" Background="#7F1D1D" CornerRadius="9" Padding="6,1" Margin="4,0,0,0"
+                        Visibility="{Binding HasErrors, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="{Binding ErrorCount}" Foreground="#FCA5A5" FontSize="10" FontWeight="SemiBold"/>
+                </Border>
+                <!-- Warning badge -->
+                <Border Grid.Column="2" Background="#78350F" CornerRadius="9" Padding="6,1" Margin="3,0,0,0"
+                        Visibility="{Binding HasWarnings, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="{Binding WarningCount}" Foreground="#FCD34D" FontSize="10" FontWeight="SemiBold"/>
+                </Border>
+            </Grid>
+        </DataTemplate>
+
+    </UserControl.Resources>
+
+    <!-- ══ Root layout ═══════════════════════════════════════════════════════════ -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>   <!-- sticky header -->
+            <RowDefinition Height="*"/>      <!-- content -->
+            <RowDefinition Height="Auto"/>   <!-- status bar -->
+        </Grid.RowDefinitions>
+
+        <!-- ══ STICKY HEADER ══════════════════════════════════════════════════════ -->
+        <Border Grid.Row="0" Background="#070F1A" BorderBrush="#1C3349" BorderThickness="0,0,0,1"
+                Padding="20,14,20,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Left: server identity -->
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="7 Days to Die" Foreground="#60A5FA"
+                                   FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <TextBlock Text=" · " Foreground="#3D5A74" FontSize="12" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding ServerName}" Foreground="#F1F5F9"
+                                   FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <!-- Unsaved changes badge -->
+                        <Border Background="#1D3A6E" CornerRadius="10" Padding="8,2" Margin="12,0,0,0"
+                                VerticalAlignment="Center"
+                                Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding UnsavedChangeCount}" Foreground="#60A5FA"
+                                           FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Text=" unsaved" Foreground="#60A5FA" FontSize="11"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <!-- Config file path -->
+                        <TextBlock Text="{Binding ConfigFilePath}" Foreground="#3D5A74"
+                                   FontSize="11" VerticalAlignment="Center"/>
+                        <Button Content="📋" Style="{StaticResource IconButton}" Padding="4,2" Margin="4,0,0,0"
+                                Command="{Binding CopyConfigPathCommand}" ToolTip="Copy path"/>
+                        <!-- Config not found warning -->
+                        <Border Background="#2D1200" CornerRadius="4" Padding="6,2" Margin="8,0,0,0"
+                                Visibility="{Binding ConfigFileExists, Converter={StaticResource InvBoolToVis}}">
+                            <TextBlock Text="⚠ serverconfig.xml not found — will create on save"
+                                       Foreground="#F59E0B" FontSize="11"/>
+                        </Border>
+                        <!-- Last saved -->
+                        <TextBlock Text="{Binding LastSavedText}" Foreground="#3D5A74"
+                                   FontSize="11" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Right: action buttons -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Validation summary pill -->
+                    <Border Background="#1A0808" BorderBrush="#7F1D1D" BorderThickness="1"
+                            CornerRadius="6" Padding="8,5" Margin="0,0,10,0"
+                            Visibility="{Binding HasErrors, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⚠ " Foreground="#EF4444" FontSize="12"/>
+                            <TextBlock Text="{Binding ErrorSummary}" Foreground="#FCA5A5" FontSize="12"
+                                       MaxWidth="300" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Button Content="Open Folder" Style="{StaticResource GhostBtn}" Margin="0,0,6,0"
+                            Command="{Binding OpenConfigFolderCommand}"/>
+                    <Button Content="Reload from File" Style="{StaticResource GhostBtn}" Margin="0,0,6,0"
+                            Command="{Binding ReloadFromFileCommand}"/>
+                    <Button Content="Discard" Style="{StaticResource GhostBtn}" Margin="0,0,8,0"
+                            Command="{Binding DiscardCommand}"/>
+                    <Button Content="Save Settings" Style="{StaticResource PrimaryBtn}"
+                            Command="{Binding SaveCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ══ CONTENT AREA ════════════════════════════════════════════════════════ -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="210"/>   <!-- sidebar -->
+                <ColumnDefinition Width="*"/>      <!-- main -->
+            </Grid.ColumnDefinitions>
+
+            <!-- ── Category sidebar ───────────────────────────────────────────── -->
+            <Border Grid.Column="0" Background="#070F1A" BorderBrush="#1C3349" BorderThickness="0,0,1,0"
+                    Padding="10,14,10,14">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="CATEGORIES"
+                               Foreground="#3D5A74" FontSize="10" FontWeight="SemiBold"
+                               Margin="4,0,0,10"/>
+
+                    <!-- Search -->
+                    <TextBox DockPanel.Dock="Top" Style="{StaticResource DarkInput}"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             Padding="8,5" FontSize="12" Margin="0,0,0,10"/>
+
+                    <!-- Show Advanced toggle -->
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="4,10,0,0">
+                        <CheckBox Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding ShowAdvanced}" VerticalAlignment="Center"/>
+                        <TextBlock Text="Show advanced" Foreground="#4B6280" FontSize="11"
+                                   Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <ListBox ItemsSource="{Binding Categories}"
+                             SelectedValue="{Binding SelectedCategory, Mode=TwoWay}"
+                             SelectedValuePath="Name"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ItemContainerStyle="{StaticResource CatItem}"/>
+                </DockPanel>
+            </Border>
+
+            <!-- ── Main settings area ─────────────────────────────────────────── -->
+            <Grid Grid.Column="1" Background="#070F1A">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Category header -->
+                <Border Grid.Row="0" Padding="20,12,20,12" BorderBrush="#1C3349" BorderThickness="0,0,0,1"
+                        Background="#070F1A">
+                    <TextBlock Text="{Binding SelectedCategory}" Foreground="#94A3B8"
+                               FontSize="13" FontWeight="SemiBold"/>
+                </Border>
+
+                <!-- Settings list -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled" Padding="20,14,20,14">
+                    <StackPanel>
+
+                        <!-- Crossplay compatibility panel (shown when crossplay is enabled) -->
+                        <Border Visibility="{Binding ShowCrossplayPanel, Converter={StaticResource BoolToVis}}"
+                                Background="#0A1E30" BorderBrush="#1E4060" BorderThickness="1"
+                                CornerRadius="10" Padding="16,14" Margin="0,0,0,12">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                    <TextBlock Text="🎮 Console Crossplay Requirements"
+                                               Foreground="#60A5FA" FontSize="13" FontWeight="SemiBold"/>
+                                    <!-- All pass indicator -->
+                                    <Border Background="#052A10" BorderBrush="#14532D" BorderThickness="1"
+                                            CornerRadius="5" Padding="8,2" Margin="12,0,0,0"
+                                            Visibility="{Binding AllCrossplayChecksPass, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Text="✓ All requirements met" Foreground="#4ADE80"
+                                                   FontSize="11" FontWeight="SemiBold"/>
+                                    </Border>
+                                </StackPanel>
+
+                                <ItemsControl ItemsSource="{Binding CrossplayChecks}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:CrossplayCheck}">
+                                            <StackPanel Orientation="Horizontal" Margin="0,3">
+                                                <TextBlock FontSize="13" Width="18" VerticalAlignment="Center">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="✓"/>
+                                                            <Setter Property="Foreground" Value="#22C55E"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Passed}" Value="False">
+                                                                    <Setter Property="Text" Value="✗"/>
+                                                                    <Setter Property="Foreground" Value="#EF4444"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <TextBlock Text="{Binding Name}" FontSize="12.5" Margin="8,0,0,0"
+                                                           VerticalAlignment="Center">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="#4ADE80"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Passed}" Value="False">
+                                                                    <Setter Property="Foreground" Value="#94A3B8"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <TextBlock Text=" — " Foreground="#3D5A74" FontSize="12" Margin="4,0"/>
+                                                <TextBlock Text="{Binding FixHint}" Foreground="#FCD34D"
+                                                           FontSize="12" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <Button Content="Apply Recommended Crossplay Settings"
+                                        Style="{StaticResource GhostBtn}"
+                                        Command="{Binding ApplyCrossplaySettingsCommand}"
+                                        HorizontalAlignment="Left" Margin="0,10,0,0"
+                                        Padding="12,6" FontSize="12"
+                                        Visibility="{Binding AllCrossplayChecksPass, Converter={StaticResource InvBoolToVis}}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Sandbox Code special panel -->
+                        <Border Visibility="{Binding ShowSandboxPanel, Converter={StaticResource BoolToVis}}"
+                                Background="#0A1A10" BorderBrush="#1A3020" BorderThickness="1"
+                                CornerRadius="10" Padding="16,14" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="V3 Sandbox Code" Foreground="#4ADE80"
+                                           FontSize="13" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                <TextBlock TextWrapping="Wrap" Foreground="#5A8A68" FontSize="12" Margin="0,0,0,10"
+                                           LineHeight="18">
+                                    The Sandbox Code encodes all V3 gameplay settings — difficulty, zombie speed, loot abundance, and more. Generate a code from the in-game Options menu or paste one from another server.
+                                </TextBlock>
+                                <Border Background="#051205" BorderBrush="#1A3020" BorderThickness="1"
+                                        CornerRadius="5" Padding="8,6" Margin="0,0,0,8">
+                                    <TextBlock Text="ℹ Visual editing is not available — the encoding format is proprietary and undocumented. The code is stored and applied exactly as entered."
+                                               Foreground="#5A8A68" FontSize="11.5" TextWrapping="Wrap"/>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Detected saves notice -->
+                        <Border Margin="0,0,0,12" Padding="12,10"
+                                Background="#0A1826" BorderBrush="#1C3349" BorderThickness="1" CornerRadius="8"
+                                Visibility="{Binding ShowDetectedSavesPanel, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="📁 Detected saves: " Foreground="#4B6280" FontSize="12"/>
+                                <TextBlock Text="{Binding DetectedSaves.Count}"
+                                           Foreground="#60A5FA" FontSize="12" FontWeight="SemiBold"/>
+                                <TextBlock Text=" folders found in UserData/Saves" Foreground="#4B6280" FontSize="12"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Settings items -->
+                        <ItemsControl ItemsSource="{Binding FilteredItems}"/>
+
+                        <!-- Empty state -->
+                        <TextBlock Foreground="#3D5A74" FontSize="13" HorizontalAlignment="Center"
+                                   Margin="0,40,0,0" Text="No settings match the current filter.">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding FilteredItems.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+
+        <!-- ══ STATUS BAR ═════════════════════════════════════════════════════════ -->
+        <Border Grid.Row="2" Background="#070F1A" BorderBrush="#1C3349" BorderThickness="0,1,0,0"
+                Padding="20,8,20,8"
+                Visibility="{Binding HasStatusMessage, Converter={StaticResource BoolToVis}}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Text" Value="✓"/>
+                            <Setter Property="Foreground" Value="#22C55E"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsStatusError}" Value="True">
+                                    <Setter Property="Text" Value="✗"/>
+                                    <Setter Property="Foreground" Value="#EF4444"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <TextBlock Text="{Binding StatusMessage}" FontSize="12" VerticalAlignment="Center">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="#4ADE80"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsStatusError}" Value="True">
+                                    <Setter Property="Foreground" Value="#FCA5A5"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

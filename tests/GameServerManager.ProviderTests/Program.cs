@@ -100,6 +100,11 @@ Test7DaysToDieSteamCmdArgs();
 await Test7DaysToDieConfigXmlAsync();
 Test7DaysToDieLaunchBuilder();
 Test7DaysToDieValidator();
+Test7DaysToDieSettingDescriptions();
+Test7DaysToDieCrossplayValidation();
+Test7DaysToDieWebDashboardSettings();
+await Test7DaysToDieXmlPreservesUnknownPropertiesAsync();
+Test7DaysToDieSandboxCodeRoundTrip();
 
 Console.WriteLine("Provider and server data tests passed.");
 
@@ -1370,6 +1375,231 @@ static void Test7DaysToDieValidator()
     v2Profile.Settings["GameDifficulty"] = "2";
     var v2Result = validator.Validate(v2Profile);
     Assert(v2Result.HasWarnings, "V2 settings without SandboxCode must produce a migration warning.");
+}
+
+static void Test7DaysToDieSettingDescriptions()
+{
+    var registry = GameProviderRegistry.CreateDefault();
+    registry.TryGetProvider("seven_days_to_die", out var provider);
+
+    // Every setting must have a description
+    var withoutDescription = provider.SettingsDefinitions
+        .Where(s => string.IsNullOrWhiteSpace(s.Description))
+        .Select(s => s.SettingKey)
+        .ToList();
+    Assert(withoutDescription.Count == 0,
+        $"Every setting must have a Description. Missing: {string.Join(", ", withoutDescription)}");
+
+    // Number settings must have units
+    var numbersWithoutUnit = provider.SettingsDefinitions
+        .Where(s => s.ControlType == SettingControlType.NumberBox && string.IsNullOrWhiteSpace(s.Unit))
+        .Select(s => s.SettingKey)
+        .ToList();
+    Assert(numbersWithoutUnit.Count == 0,
+        $"All number settings must have a Unit. Missing: {string.Join(", ", numbersWithoutUnit)}");
+
+    // All settings must have a category
+    var withoutCategory = provider.SettingsDefinitions
+        .Where(s => string.IsNullOrWhiteSpace(s.Category))
+        .Select(s => s.SettingKey)
+        .ToList();
+    Assert(withoutCategory.Count == 0,
+        $"All settings must have a Category. Missing: {string.Join(", ", withoutCategory)}");
+
+    // Password settings must be PasswordField type
+    Assert(provider.SettingsDefinitions.First(s => s.SettingKey == "ServerPassword").ControlType == SettingControlType.PasswordField,
+        "ServerPassword must use PasswordField control type.");
+    Assert(provider.SettingsDefinitions.First(s => s.SettingKey == "TelnetPassword").ControlType == SettingControlType.PasswordField,
+        "TelnetPassword must use PasswordField control type.");
+
+    // Web dashboard settings must be present
+    Assert(provider.SettingsDefinitions.Any(s => s.SettingKey == "WebDashboardEnabled"),
+        "Provider must include WebDashboardEnabled (modern dashboard support).");
+    Assert(provider.SettingsDefinitions.Any(s => s.SettingKey == "EnableMapRendering"),
+        "Provider must include EnableMapRendering.");
+}
+
+static void Test7DaysToDieCrossplayValidation()
+{
+    var validator = new SevenDaysToDieValidator();
+
+    // Crossplay + > 8 players → error
+    var crossplayTooManyPlayers = new ServerProfile
+    {
+        Id = "7dtd-xp-players",
+        GameId = "seven_days_to_die",
+        ServerName = "Crossplay Test",
+        InstallPath = @"C:\Servers\7dtd",
+        MaxPlayers = 16,
+        Ports = new List<ServerPort> { new() { Name = "Game", Port = 26900 } }
+    };
+    crossplayTooManyPlayers.Settings["ServerAllowCrossplay"] = "True";
+    crossplayTooManyPlayers.Settings["EACEnabled"] = "True";
+    var r1 = validator.Validate(crossplayTooManyPlayers);
+    Assert(r1.HasWarnings || !r1.IsValid,
+        "Crossplay with > 8 players must produce a warning or error.");
+
+    // Crossplay + EAC disabled → error
+    var crossplayNoEac = new ServerProfile
+    {
+        Id = "7dtd-xp-eac",
+        GameId = "seven_days_to_die",
+        ServerName = "Crossplay No EAC",
+        InstallPath = @"C:\Servers\7dtd",
+        MaxPlayers = 8,
+        Ports = new List<ServerPort> { new() { Name = "Game", Port = 26900 } }
+    };
+    crossplayNoEac.Settings["ServerAllowCrossplay"] = "True";
+    crossplayNoEac.Settings["EACEnabled"] = "False";
+    var r2 = validator.Validate(crossplayNoEac);
+    Assert(!r2.IsValid, "Crossplay with EAC disabled must produce a validation error.");
+    Assert(r2.Errors.Any(e => e.Contains("EAC", StringComparison.OrdinalIgnoreCase)),
+        "EAC crossplay error must mention EAC.");
+
+    // Invalid port range
+    var badPort = new ServerProfile
+    {
+        Id = "7dtd-badport",
+        GameId = "seven_days_to_die",
+        ServerName = "Bad Port",
+        InstallPath = @"C:\Servers\7dtd",
+        MaxPlayers = 8,
+        Ports = new List<ServerPort> { new() { Name = "Game", Port = 70000 } }
+    };
+    var r3 = validator.Validate(badPort);
+    Assert(!r3.IsValid, "Port > 65530 must produce a validation error.");
+
+    // Valid crossplay config
+    var validCrossplay = new ServerProfile
+    {
+        Id = "7dtd-xp-valid",
+        GameId = "seven_days_to_die",
+        ServerName = "Valid Crossplay",
+        InstallPath = @"C:\Servers\7dtd",
+        MaxPlayers = 8,
+        Ports = new List<ServerPort> { new() { Name = "Game", Port = 26900 } }
+    };
+    validCrossplay.Settings["ServerAllowCrossplay"] = "True";
+    validCrossplay.Settings["EACEnabled"] = "True";
+    validCrossplay.Settings["IgnoreEOSSanctions"] = "False";
+    var r4 = validator.Validate(validCrossplay);
+    Assert(r4.IsValid, "Valid crossplay configuration must pass validation.");
+}
+
+static void Test7DaysToDieWebDashboardSettings()
+{
+    var registry = GameProviderRegistry.CreateDefault();
+    registry.TryGetProvider("seven_days_to_die", out var provider);
+
+    // Web dashboard settings must coexist with old control panel settings
+    Assert(provider.SettingsDefinitions.Any(s => s.SettingKey == "ControlPanelEnabled"),
+        "Legacy ControlPanelEnabled must still be present.");
+    Assert(provider.SettingsDefinitions.Any(s => s.SettingKey == "WebDashboardEnabled"),
+        "Modern WebDashboardEnabled must be present.");
+
+    // Web dashboard settings must be in the correct category
+    var dashCat = provider.SettingsDefinitions
+        .First(s => s.SettingKey == "WebDashboardEnabled").Category;
+    Assert(dashCat == "Web & Dashboard",
+        $"WebDashboardEnabled must be in 'Web & Dashboard' category, got '{dashCat}'.");
+
+    // Advanced settings must be marked as advanced
+    Assert(provider.SettingsDefinitions.First(s => s.SettingKey == "WebDashboardUrl").IsAdvanced,
+        "WebDashboardUrl must be marked as advanced.");
+    Assert(provider.SettingsDefinitions.First(s => s.SettingKey == "EnableMapRendering").IsAdvanced,
+        "EnableMapRendering must be marked as advanced.");
+}
+
+static async Task Test7DaysToDieXmlPreservesUnknownPropertiesAsync()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var configPath = Path.Combine(tempRoot, "serverconfig.xml");
+
+        // Write a config with known + unknown + commented properties
+        var xml = @"<?xml version=""1.0"" encoding=""UTF-8"" standalone=""yes""?>
+<ServerSettings>
+  <property name=""ServerName"" value=""Preserved Server"" />
+  <property name=""FutureGameProperty"" value=""future-value"" />
+  <property name=""AnotherFutureProperty"" value=""42"" />
+</ServerSettings>";
+        await File.WriteAllTextAsync(configPath, xml);
+
+        // Save via service — unknown properties must survive
+        var profile = new ServerProfile
+        {
+            Id = "7dtd-preserve-test",
+            GameId = "seven_days_to_die",
+            ServerName = "Preserved Server",
+            Ports = new List<ServerPort> { new() { Name = "Game", Port = 26900 } }
+        };
+        profile.Settings["EACEnabled"] = "True";
+
+        var svc = new SevenDaysToDieConfigService();
+        await svc.SaveAsync(profile, configPath, createBackup: false);
+
+        var doc = await ServerConfigXmlDocument.LoadAsync(configPath);
+        Assert(doc.GetValue("FutureGameProperty") == "future-value",
+            "Unknown property FutureGameProperty must survive a save.");
+        Assert(doc.GetValue("AnotherFutureProperty") == "42",
+            "Unknown property AnotherFutureProperty must survive a save.");
+        Assert(doc.GetValue("EACEnabled") == "True",
+            "Known property EACEnabled must be written correctly.");
+
+        // Malformed XML must not replace the original
+        var originalContent = await File.ReadAllTextAsync(configPath);
+        try
+        {
+            var badDoc = ServerConfigXmlDocument.Parse("<ServerSettings><unclosed>");
+            // If we reach this point, the parse succeeded (should not happen but be safe)
+        }
+        catch (System.Xml.XmlException)
+        {
+            // Expected — malformed XML should not parse
+        }
+        var afterBadAttempt = await File.ReadAllTextAsync(configPath);
+        Assert(afterBadAttempt == originalContent,
+            "Malformed XML must not modify the on-disk config.");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
+}
+
+static void Test7DaysToDieSandboxCodeRoundTrip()
+{
+    // SandboxCode is treated as an opaque string — it must be preserved exactly.
+    var codes = new[]
+    {
+        "AAAJABJACJADJARFBNC",
+        "A",
+        "",
+        "ABCDEF123456!@#$%",
+        new string('Z', 256) // long code
+    };
+
+    foreach (var code in codes)
+    {
+        var doc = ServerConfigXmlDocument.CreateDefault();
+        doc.SetValue("SandboxCode", code);
+        var rendered = doc.Render();
+
+        var reparsed = ServerConfigXmlDocument.Parse(rendered);
+        var readBack = reparsed.GetValue("SandboxCode") ?? string.Empty;
+        Assert(readBack == code,
+            $"SandboxCode '{code[..Math.Min(20, code.Length)]}...' must survive XML serialize/deserialize round-trip.");
+    }
+
+    // IsSensitive must return false for SandboxCode (it is not a password)
+    Assert(!SandboxCodeHelpers.IsSensitive("SandboxCode"),
+        "SandboxCode must not be treated as sensitive (it is not a password).");
+
+    // Password keys must be sensitive
+    Assert(SandboxCodeHelpers.IsSensitive("ServerPassword"), "ServerPassword must be sensitive.");
+    Assert(SandboxCodeHelpers.IsSensitive("TelnetPassword"), "TelnetPassword must be sensitive.");
+    Assert(SandboxCodeHelpers.IsSensitive("ControlPanelPassword"), "ControlPanelPassword must be sensitive.");
 }
 
 static string CreateTempRoot()

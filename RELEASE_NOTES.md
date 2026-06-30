@@ -1,5 +1,14 @@
 # Release Notes
 
+## v4.0.5
+
+### Added
+- **7 Days to Die dedicated settings panel** — replacing the generic editor with a full professional UI: dark-themed sticky header with unsaved-change count badge, category sidebar with per-category error/warning badges, setting cards with descriptions, units, restart badges, and inline validation, a crossplay compatibility panel with requirement checklist and auto-fix button, a Sandbox Code (V3) panel with copy/paste workflow, and a detected-saves notice on the World & Map category.
+- Settings now read from and write to **`serverconfig.xml`** directly (atomic save with `.bak` backup), in addition to `servers.json`. Server launch also syncs `serverconfig.xml` before starting the process.
+- All 7DtD settings have descriptions, help text, units (for numeric fields), recommended values, and categories.
+
+---
+
 ## v4.0.4
 
 ### Fixed
