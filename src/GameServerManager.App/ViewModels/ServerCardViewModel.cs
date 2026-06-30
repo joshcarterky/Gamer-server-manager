@@ -57,6 +57,10 @@ public class ServerCardViewModel : BaseViewModel
     public string Endpoint => BuildEndpoint();
     public string IconText => Provider.GameName.Length == 0 ? "?" : Provider.GameName[..1].ToUpperInvariant();
 
+    // ── Game artwork ──────────────────────────────────────────────────────────
+    // Official Steam key-art streamed at runtime; null → initials tile shows.
+    public string? GameImageUrl => GameArtwork.GetTileImageUrl(Provider.GameId);
+
     // ── Game identity ─────────────────────────────────────────────────────────
     public string GameInitials
     {

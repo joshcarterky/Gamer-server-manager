@@ -609,16 +609,28 @@
                                                         ToolTip="Toggle favorite"
                                                         Command="{Binding DataContext.ToggleFavoriteCommand, ElementName=ServersViewRoot}"
                                                         CommandParameter="{Binding}"/>
-                                                <!-- Game tile -->
+                                                <!-- Game tile: initials fallback + Steam key-art overlay -->
                                                 <Border Width="48" Height="48" CornerRadius="8"
                                                         Background="{Binding GameTileBackground}"
                                                         BorderBrush="{Binding GameAccentColor}"
                                                         BorderThickness="1">
-                                                    <TextBlock Text="{Binding GameInitials, Mode=OneWay}"
-                                                               Foreground="{Binding GameAccentColor}"
-                                                               FontSize="16" FontWeight="Bold"
-                                                               HorizontalAlignment="Center"
-                                                               VerticalAlignment="Center"/>
+                                                    <Grid>
+                                                        <!-- Fallback layer: shows when no art / offline -->
+                                                        <TextBlock Text="{Binding GameInitials, Mode=OneWay}"
+                                                                   Foreground="{Binding GameAccentColor}"
+                                                                   FontSize="16" FontWeight="Bold"
+                                                                   HorizontalAlignment="Center"
+                                                                   VerticalAlignment="Center"/>
+                                                        <!-- Artwork layer: ImageBrush draws nothing if the
+                                                             source is null or fails to load -->
+                                                        <Border CornerRadius="7"
+                                                                RenderOptions.BitmapScalingMode="HighQuality">
+                                                            <Border.Background>
+                                                                <ImageBrush Stretch="UniformToFill"
+                                                                            ImageSource="{Binding GameImageUrl, Mode=OneWay}"/>
+                                                            </Border.Background>
+                                                        </Border>
+                                                    </Grid>
                                                 </Border>
                                             </StackPanel>
 

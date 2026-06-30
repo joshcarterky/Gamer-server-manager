@@ -1,5 +1,15 @@
 # Release Notes
 
+## v4.0.6
+
+### Added
+- **Game artwork on server tiles** — each server card now shows the official game key-art for its game (ARK, Palworld, Valheim, Rust, 7 Days to Die, Conan Exiles, Project Zomboid, Satisfactory, Factorio, and more). Art is streamed from Steam's public CDN on demand and cached; games without Steam art (Minecraft, generic) keep the colored initials tile.
+
+### Fixed
+- **7 Days to Die settings UI lag** — validation now debounces (400 ms) instead of running on every keystroke, and the settings list virtualizes so only on-screen cards are rendered. Typing and scrolling are now smooth.
+
+---
+
 ## v4.0.5
 
 ### Added

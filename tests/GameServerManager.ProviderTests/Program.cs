@@ -105,6 +105,7 @@ Test7DaysToDieCrossplayValidation();
 Test7DaysToDieWebDashboardSettings();
 await Test7DaysToDieXmlPreservesUnknownPropertiesAsync();
 Test7DaysToDieSandboxCodeRoundTrip();
+TestGameArtworkMapping();
 
 Console.WriteLine("Provider and server data tests passed.");
 
@@ -1600,6 +1601,34 @@ static void Test7DaysToDieSandboxCodeRoundTrip()
     Assert(SandboxCodeHelpers.IsSensitive("ServerPassword"), "ServerPassword must be sensitive.");
     Assert(SandboxCodeHelpers.IsSensitive("TelnetPassword"), "TelnetPassword must be sensitive.");
     Assert(SandboxCodeHelpers.IsSensitive("ControlPanelPassword"), "ControlPanelPassword must be sensitive.");
+}
+
+static void TestGameArtworkMapping()
+{
+    // Known game → URL carrying the correct Steam *store* app id
+    var sevenDays = GameArtwork.GetTileImageUrl("seven_days_to_die");
+    Assert(sevenDays != null && sevenDays.Contains("/251570/", StringComparison.Ordinal),
+        "7DtD tile art must use store app id 251570.");
+    Assert(!sevenDays!.Contains("/294420/", StringComparison.Ordinal),
+        "7DtD tile art must NOT use the dedicated-server app id 294420.");
+
+    // Both ARK ASA ids (current + legacy) map to the same store app id
+    var asa = GameArtwork.GetTileImageUrl("ark-survival-ascended");
+    var asaLegacy = GameArtwork.GetTileImageUrl("ark_survival_ascended");
+    Assert(asa != null && asa.Contains("/2399830/", StringComparison.Ordinal),
+        "ARK ASA tile art must use store app id 2399830.");
+    Assert(asa == asaLegacy, "Both ARK ASA game ids must resolve to the same artwork URL.");
+
+    // Case-insensitive lookup
+    Assert(GameArtwork.GetTileImageUrl("PALWORLD") != null,
+        "Artwork lookup must be case-insensitive.");
+
+    // Unknown / artless games → null (callers fall back to the initials tile)
+    Assert(GameArtwork.GetTileImageUrl("minecraft_java") == null,
+        "Minecraft has no Steam art and must return null.");
+    Assert(GameArtwork.GetTileImageUrl("generic_server") == null,
+        "Generic server must return null artwork.");
+    Assert(GameArtwork.GetTileImageUrl("") == null, "Empty game id must return null.");
 }
 
 static string CreateTempRoot()
