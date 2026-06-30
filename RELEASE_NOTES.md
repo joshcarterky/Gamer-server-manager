@@ -1,5 +1,12 @@
 # Release Notes
 
+## v4.0.3
+
+### Added
+- **Generic server settings editor** — clicking Settings on any non-ARK game (7 Days to Die, Minecraft, Palworld, Valheim, etc.) now opens a full categorized settings editor instead of a "not implemented" placeholder. Supports all control types: text, password, toggle, dropdown, number, and folder picker. Changes are saved back to the server profile with Save/Revert support.
+
+---
+
 ## v4.0.2
 
 ### Fixed
