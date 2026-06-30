@@ -191,30 +191,31 @@
                         <!-- Plain text -->
                         <TextBox Visibility="{Binding IsText, Converter={StaticResource BoolToVis}}"
                                  Style="{StaticResource Input}"
-                                 Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"/>
+                                 Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
 
-                        <!-- Password (rendered as text — server admin tool) -->
+                        <!-- Password -->
                         <TextBox Visibility="{Binding IsPassword, Converter={StaticResource BoolToVis}}"
                                  Style="{StaticResource Input}"
-                                 Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"/>
+                                 Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
 
                         <!-- Number -->
                         <TextBox Visibility="{Binding IsNumber, Converter={StaticResource BoolToVis}}"
                                  Style="{StaticResource Input}"
-                                 Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"/>
+                                 Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
 
                         <!-- Toggle -->
                         <CheckBox Visibility="{Binding IsToggle, Converter={StaticResource BoolToVis}}"
-                                  IsChecked="{Binding BooleanValue}"
+                                  IsChecked="{Binding BooleanValue, Mode=TwoWay}"
                                   VerticalAlignment="Center"
                                   Foreground="#94A3B8" Margin="2,0"/>
 
-                        <!-- Dropdown -->
+                        <!-- Dropdown: SelectedValuePath maps OptionItem.Value → GenericSettingItemViewModel.Value directly -->
                         <ComboBox Visibility="{Binding IsDropdown, Converter={StaticResource BoolToVis}}"
                                   Style="{StaticResource ComboInput}"
                                   ItemsSource="{Binding ParsedOptions}"
                                   DisplayMemberPath="Label"
-                                  SelectedItem="{Binding SelectedOption}"/>
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding Value, Mode=TwoWay}"/>
 
                         <!-- Folder picker -->
                         <DockPanel Visibility="{Binding IsFolderPicker, Converter={StaticResource BoolToVis}}">
@@ -224,7 +225,7 @@
                                     Command="{Binding BrowseCommand}"
                                     Margin="6,0,0,0" Padding="10,7"/>
                             <TextBox Style="{StaticResource Input}"
-                                     Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"/>
+                                     Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
                         </DockPanel>
 
                         <!-- Modified indicator -->

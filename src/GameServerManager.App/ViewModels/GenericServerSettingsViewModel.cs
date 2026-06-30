@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Windows;
 using GameServerManager.Core.Models;
 using GameServerManager.GameProviders;
@@ -34,7 +33,7 @@ public sealed class GenericServerSettingsViewModel : BaseViewModel
         FilteredSettings = new ObservableCollection<GenericSettingItemViewModel>(allSettings);
 
         SelectedCategory = Categories.FirstOrDefault() ?? string.Empty;
-        SaveCommand = new RelayCommand(async _ => await SaveAsync());
+        SaveCommand = new RelayCommand(_ => _ = SaveAsync());
         RevertCommand = new RelayCommand(_ => Revert());
     }
 
@@ -69,7 +68,12 @@ public sealed class GenericServerSettingsViewModel : BaseViewModel
     public string Message
     {
         get => _message;
-        set => SetProperty(ref _message, value);
+        set
+        {
+            _message = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasMessage));
+        }
     }
 
     public bool HasUnsavedChanges => AllSettings.Any(s => s.IsModified);
@@ -94,17 +98,23 @@ public sealed class GenericServerSettingsViewModel : BaseViewModel
 
     private async Task SaveAsync()
     {
-        foreach (var setting in AllSettings)
-            _profile.Settings[setting.Key] = setting.Value;
+        try
+        {
+            foreach (var setting in AllSettings)
+                _profile.Settings[setting.Key] = setting.Value;
 
-        await _serversJsonService.UpdateServerAsync(_profile);
+            await _serversJsonService.UpdateServerAsync(_profile);
 
-        foreach (var setting in AllSettings)
-            setting.CommitSave();
+            foreach (var setting in AllSettings)
+                setting.CommitSave();
 
-        Message = $"Settings saved for {ServerName}.";
-        OnPropertyChanged(nameof(HasUnsavedChanges));
-        OnPropertyChanged(nameof(HasMessage));
+            Message = $"Saved — {AllSettings.Count} settings written for {ServerName}.";
+            OnPropertyChanged(nameof(HasUnsavedChanges));
+        }
+        catch (Exception ex)
+        {
+            Message = $"Save failed: {ex.Message}";
+        }
     }
 
     private void Revert()
@@ -114,7 +124,6 @@ public sealed class GenericServerSettingsViewModel : BaseViewModel
 
         Message = "Reverted to saved values.";
         OnPropertyChanged(nameof(HasUnsavedChanges));
-        OnPropertyChanged(nameof(HasMessage));
     }
 }
 
@@ -139,6 +148,7 @@ public sealed class GenericSettingItemViewModel : BaseViewModel
         IsNumber = def.ControlType == SettingControlType.NumberBox;
         IsFolderPicker = def.ControlType is SettingControlType.FolderPicker or SettingControlType.FilePicker;
 
+        // Parse "value:Label" option strings for dropdowns
         ParsedOptions = def.Options?.Select(o =>
         {
             var idx = o.IndexOf(':');
@@ -178,33 +188,18 @@ public sealed class GenericSettingItemViewModel : BaseViewModel
         get => _value;
         set
         {
+            if (_value == value) return;
             _value = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsModified));
+            OnPropertyChanged(nameof(BooleanValue));
         }
     }
 
     public bool BooleanValue
     {
         get => _value.Equals("True", StringComparison.OrdinalIgnoreCase);
-        set
-        {
-            Value = value ? "True" : "False";
-            OnPropertyChanged();
-        }
-    }
-
-    public OptionItem? SelectedOption
-    {
-        get => ParsedOptions.FirstOrDefault(o => o.Value.Equals(_value, StringComparison.OrdinalIgnoreCase));
-        set
-        {
-            if (value != null)
-            {
-                Value = value.Value;
-                OnPropertyChanged();
-            }
-        }
+        set => Value = value ? "True" : "False";
     }
 
     public void CommitSave()

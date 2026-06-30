@@ -1,5 +1,12 @@
 # Release Notes
 
+## v4.0.4
+
+### Fixed
+- Generic server settings editor: settings were not editable. Fixed dropdown bindings to use `SelectedValuePath`/`SelectedValue` (direct string mapping instead of object reference), switched text field bindings to `LostFocus` trigger to prevent feedback loop, and added error reporting on save.
+
+---
+
 ## v4.0.3
 
 ### Added
