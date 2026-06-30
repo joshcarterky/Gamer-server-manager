@@ -203,6 +203,7 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel
     private bool _isStatusError;
     private bool _isBusy;
     private DateTime? _lastSavedAt;
+    private System.Windows.Threading.DispatcherTimer? _validationTimer;
 
     public SevenDaysToDieSettingsViewModel(ServerProfile profile, IGameServerProvider provider)
     {
@@ -569,7 +570,18 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel
 
     private void OnAnyValueChanged(object? sender, EventArgs e)
     {
-        RunValidation();
+        // Debounce: run validation 400 ms after the last change, not on every keystroke
+        if (_validationTimer == null)
+        {
+            _validationTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(400)
+            };
+            _validationTimer.Tick += (_, _) => { _validationTimer.Stop(); RunValidation(); };
+        }
+        _validationTimer.Stop();
+        _validationTimer.Start();
+
         OnPropertyChanged(nameof(HasUnsavedChanges));
         OnPropertyChanged(nameof(UnsavedChangeCount));
         SaveCommand.NotifyCanExecuteChanged();

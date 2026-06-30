@@ -629,127 +629,157 @@
                                FontSize="13" FontWeight="SemiBold"/>
                 </Border>
 
-                <!-- Settings list -->
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled" Padding="20,14,20,14">
-                    <StackPanel>
+                <!-- Settings list — DockPanel lets the panels float at top while the
+                     ListBox fills the remaining height with a virtualized viewport -->
+                <DockPanel Grid.Row="1">
 
-                        <!-- Crossplay compatibility panel (shown when crossplay is enabled) -->
-                        <Border Visibility="{Binding ShowCrossplayPanel, Converter={StaticResource BoolToVis}}"
-                                Background="#0A1E30" BorderBrush="#1E4060" BorderThickness="1"
-                                CornerRadius="10" Padding="16,14" Margin="0,0,0,12">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                    <TextBlock Text="🎮 Console Crossplay Requirements"
-                                               Foreground="#60A5FA" FontSize="13" FontWeight="SemiBold"/>
-                                    <!-- All pass indicator -->
-                                    <Border Background="#052A10" BorderBrush="#14532D" BorderThickness="1"
-                                            CornerRadius="5" Padding="8,2" Margin="12,0,0,0"
-                                            Visibility="{Binding AllCrossplayChecksPass, Converter={StaticResource BoolToVis}}">
-                                        <TextBlock Text="✓ All requirements met" Foreground="#4ADE80"
-                                                   FontSize="11" FontWeight="SemiBold"/>
-                                    </Border>
-                                </StackPanel>
-
-                                <ItemsControl ItemsSource="{Binding CrossplayChecks}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="{x:Type vm:CrossplayCheck}">
-                                            <StackPanel Orientation="Horizontal" Margin="0,3">
-                                                <TextBlock FontSize="13" Width="18" VerticalAlignment="Center">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="Text" Value="✓"/>
-                                                            <Setter Property="Foreground" Value="#22C55E"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Passed}" Value="False">
-                                                                    <Setter Property="Text" Value="✗"/>
-                                                                    <Setter Property="Foreground" Value="#EF4444"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                                <TextBlock Text="{Binding Name}" FontSize="12.5" Margin="8,0,0,0"
-                                                           VerticalAlignment="Center">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="Foreground" Value="#4ADE80"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Passed}" Value="False">
-                                                                    <Setter Property="Foreground" Value="#94A3B8"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                                <TextBlock Text=" — " Foreground="#3D5A74" FontSize="12" Margin="4,0"/>
-                                                <TextBlock Text="{Binding FixHint}" Foreground="#FCD34D"
-                                                           FontSize="12" VerticalAlignment="Center"/>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-
-                                <Button Content="Apply Recommended Crossplay Settings"
-                                        Style="{StaticResource GhostBtn}"
-                                        Command="{Binding ApplyCrossplaySettingsCommand}"
-                                        HorizontalAlignment="Left" Margin="0,10,0,0"
-                                        Padding="12,6" FontSize="12"
-                                        Visibility="{Binding AllCrossplayChecksPass, Converter={StaticResource InvBoolToVis}}"/>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Sandbox Code special panel -->
-                        <Border Visibility="{Binding ShowSandboxPanel, Converter={StaticResource BoolToVis}}"
-                                Background="#0A1A10" BorderBrush="#1A3020" BorderThickness="1"
-                                CornerRadius="10" Padding="16,14" Margin="0,0,0,12">
-                            <StackPanel>
-                                <TextBlock Text="V3 Sandbox Code" Foreground="#4ADE80"
-                                           FontSize="13" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                                <TextBlock TextWrapping="Wrap" Foreground="#5A8A68" FontSize="12" Margin="0,0,0,10"
-                                           LineHeight="18">
-                                    The Sandbox Code encodes all V3 gameplay settings — difficulty, zombie speed, loot abundance, and more. Generate a code from the in-game Options menu or paste one from another server.
-                                </TextBlock>
-                                <Border Background="#051205" BorderBrush="#1A3020" BorderThickness="1"
-                                        CornerRadius="5" Padding="8,6" Margin="0,0,0,8">
-                                    <TextBlock Text="ℹ Visual editing is not available — the encoding format is proprietary and undocumented. The code is stored and applied exactly as entered."
-                                               Foreground="#5A8A68" FontSize="11.5" TextWrapping="Wrap"/>
+                    <!-- Crossplay panel (Dock=Top, hidden when crossplay off) -->
+                    <Border DockPanel.Dock="Top"
+                            Visibility="{Binding ShowCrossplayPanel, Converter={StaticResource BoolToVis}}"
+                            Background="#0A1E30" BorderBrush="#1E4060" BorderThickness="1"
+                            CornerRadius="10" Padding="16,14" Margin="20,14,20,6">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <TextBlock Text="🎮 Console Crossplay Requirements"
+                                           Foreground="#60A5FA" FontSize="13" FontWeight="SemiBold"/>
+                                <Border Background="#052A10" BorderBrush="#14532D" BorderThickness="1"
+                                        CornerRadius="5" Padding="8,2" Margin="12,0,0,0"
+                                        Visibility="{Binding AllCrossplayChecksPass, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="✓ All requirements met" Foreground="#4ADE80"
+                                               FontSize="11" FontWeight="SemiBold"/>
                                 </Border>
                             </StackPanel>
-                        </Border>
 
-                        <!-- Detected saves notice -->
-                        <Border Margin="0,0,0,12" Padding="12,10"
-                                Background="#0A1826" BorderBrush="#1C3349" BorderThickness="1" CornerRadius="8"
-                                Visibility="{Binding ShowDetectedSavesPanel, Converter={StaticResource BoolToVis}}">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="📁 Detected saves: " Foreground="#4B6280" FontSize="12"/>
-                                <TextBlock Text="{Binding DetectedSaves.Count}"
-                                           Foreground="#60A5FA" FontSize="12" FontWeight="SemiBold"/>
-                                <TextBlock Text=" folders found in UserData/Saves" Foreground="#4B6280" FontSize="12"/>
-                            </StackPanel>
-                        </Border>
+                            <ItemsControl ItemsSource="{Binding CrossplayChecks}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:CrossplayCheck}">
+                                        <StackPanel Orientation="Horizontal" Margin="0,3">
+                                            <TextBlock FontSize="13" Width="18" VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value="✓"/>
+                                                        <Setter Property="Foreground" Value="#22C55E"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Passed}" Value="False">
+                                                                <Setter Property="Text" Value="✗"/>
+                                                                <Setter Property="Foreground" Value="#EF4444"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding Name}" FontSize="12.5" Margin="8,0,0,0"
+                                                       VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#4ADE80"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Passed}" Value="False">
+                                                                <Setter Property="Foreground" Value="#94A3B8"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Text=" — " Foreground="#3D5A74" FontSize="12" Margin="4,0"/>
+                                            <TextBlock Text="{Binding FixHint}" Foreground="#FCD34D"
+                                                       FontSize="12" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
 
-                        <!-- Settings items -->
-                        <ItemsControl ItemsSource="{Binding FilteredItems}"/>
+                            <Button Content="Apply Recommended Crossplay Settings"
+                                    Style="{StaticResource GhostBtn}"
+                                    Command="{Binding ApplyCrossplaySettingsCommand}"
+                                    HorizontalAlignment="Left" Margin="0,10,0,0"
+                                    Padding="12,6" FontSize="12"
+                                    Visibility="{Binding AllCrossplayChecksPass, Converter={StaticResource InvBoolToVis}}"/>
+                        </StackPanel>
+                    </Border>
 
-                        <!-- Empty state -->
-                        <TextBlock Foreground="#3D5A74" FontSize="13" HorizontalAlignment="Center"
-                                   Margin="0,40,0,0" Text="No settings match the current filter.">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding FilteredItems.Count}" Value="0">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                    <!-- Sandbox Code panel (Dock=Top, shown on Sandbox V3 category) -->
+                    <Border DockPanel.Dock="Top"
+                            Visibility="{Binding ShowSandboxPanel, Converter={StaticResource BoolToVis}}"
+                            Background="#0A1A10" BorderBrush="#1A3020" BorderThickness="1"
+                            CornerRadius="10" Padding="16,14" Margin="20,6,20,6">
+                        <StackPanel>
+                            <TextBlock Text="V3 Sandbox Code" Foreground="#4ADE80"
+                                       FontSize="13" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                            <TextBlock TextWrapping="Wrap" Foreground="#5A8A68" FontSize="12" Margin="0,0,0,10"
+                                       LineHeight="18">
+                                The Sandbox Code encodes all V3 gameplay settings. Generate one from the in-game Options menu or paste one from another server.
+                            </TextBlock>
+                            <Border Background="#051205" BorderBrush="#1A3020" BorderThickness="1"
+                                    CornerRadius="5" Padding="8,6">
+                                <TextBlock Text="ℹ Visual editing is not available — the encoding format is proprietary. The code is stored and applied exactly as entered."
+                                           Foreground="#5A8A68" FontSize="11.5" TextWrapping="Wrap"/>
+                            </Border>
+                        </StackPanel>
+                    </Border>
 
-                    </StackPanel>
-                </ScrollViewer>
+                    <!-- Detected saves notice (Dock=Top, shown on World category) -->
+                    <Border DockPanel.Dock="Top" Padding="12,10" Margin="20,6,20,6"
+                            Background="#0A1826" BorderBrush="#1C3349" BorderThickness="1" CornerRadius="8"
+                            Visibility="{Binding ShowDetectedSavesPanel, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📁 Detected saves: " Foreground="#4B6280" FontSize="12"/>
+                            <TextBlock Text="{Binding DetectedSaves.Count}"
+                                       Foreground="#60A5FA" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBlock Text=" folders found in UserData/Saves" Foreground="#4B6280" FontSize="12"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Empty-state notice (Dock=Top, shown when no items pass the filter) -->
+                    <TextBlock DockPanel.Dock="Top"
+                               Foreground="#3D5A74" FontSize="13" HorizontalAlignment="Center"
+                               Margin="0,40,0,0" Text="No settings match the current filter.">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding FilteredItems.Count}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- Settings items — ListBox fills remaining height, VirtualizingStackPanel
+                         only renders the items actually in the viewport -->
+                    <ListBox ItemsSource="{Binding FilteredItems}"
+                             Background="Transparent" BorderThickness="0"
+                             Padding="20,6,20,14"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             VirtualizingPanel.ScrollUnit="Pixel">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding"           Value="0"/>
+                                <Setter Property="Background"        Value="Transparent"/>
+                                <Setter Property="BorderThickness"   Value="0"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <!-- Strip the default selection chrome; cards have their own border -->
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <ContentPresenter/>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel/>
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                    </ListBox>
+
+                </DockPanel>
             </Grid>
         </Grid>
 
