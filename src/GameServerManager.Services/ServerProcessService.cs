@@ -94,33 +94,45 @@ public class ServerProcessService : IDisposable
 
     public async Task StopServerAsync(ServerProfile profile)
     {
-        if (!_runningProcesses.TryGetValue(profile.Id, out var process))
-        {
-            return;
-        }
-
+        // Mark first so the process's Exited handler treats this as a clean stop,
+        // not a crash that triggers auto-restart.
         _intentionallyStopped.Add(profile.Id);
 
-        if (!process.HasExited)
+        try
         {
-            try
+            if (_runningProcesses.TryGetValue(profile.Id, out var process))
             {
-                process.CloseMainWindow();
-                if (!process.WaitForExit(5000))
+                try
                 {
-                    process.Kill(entireProcessTree: true);
+                    if (!process.HasExited)
+                    {
+                        process.CloseMainWindow();
+                        // Off the UI thread so the "Stopping…" UI stays responsive.
+                        if (!await Task.Run(() => process.WaitForExit(5000)))
+                        {
+                            process.Kill(entireProcessTree: true);
+                        }
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // Process already exited between the check and the kill — fine.
+                }
+                finally
+                {
+                    _runningProcesses.Remove(profile.Id);
+                    process.Dispose();
                 }
             }
-            finally
-            {
-                _runningProcesses.Remove(profile.Id);
-                process.Dispose();
-            }
         }
-
-        profile.Status = ServerStatus.Stopped;
-        profile.LastStoppedAt = DateTime.UtcNow;
-        await Task.CompletedTask;
+        finally
+        {
+            // Always resolve out of the transient "Stopping" state. If the kill
+            // somehow failed and the process is still alive, the monitor will flip
+            // it back to Running on the next tick — so we never get stuck.
+            profile.Status = ServerStatus.Stopped;
+            profile.LastStoppedAt = DateTime.UtcNow;
+        }
     }
 
     public async Task RestartServerAsync(ServerProfile profile)

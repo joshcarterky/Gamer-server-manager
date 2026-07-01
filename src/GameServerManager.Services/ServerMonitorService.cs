@@ -20,7 +20,14 @@ public sealed class ServerMonitorService
         return await Task.Run(async () =>
         {
             var isRunning = _processService.TryGetProcess(profile, out var process);
-            var status = isRunning ? ServerStatus.Running : profile.Status;
+            // A process that isn't running can't be mid-transition. Collapse stale
+            // transient states (Stopping/Starting/Restarting) to Stopped so a stop
+            // or start that threw/raced can never leave the card stuck forever.
+            var status = isRunning
+                ? ServerStatus.Running
+                : profile.Status is ServerStatus.Stopping or ServerStatus.Starting or ServerStatus.Restarting
+                    ? ServerStatus.Stopped
+                    : profile.Status;
             TrackStatusTransition(profile, status);
 
             var uptime = status == ServerStatus.Running && profile.LastStartedAt.HasValue

@@ -110,6 +110,7 @@ TestGameArtworkMapping();
 TestConfigFileSnapshotDrift();
 await TestBackupRestoreSafetyAsync();
 await TestServerQueryClosedPortDoesNotThrowAsync();
+await TestStuckStoppingStatusHealsAsync();
 
 Console.WriteLine("Provider and server data tests passed.");
 
@@ -158,6 +159,37 @@ static async Task TestServerQueryClosedPortDoesNotThrowAsync()
 
     var result = await new ServerQueryService().QueryAsync(profile);
     Assert(!result.Online, "Query to a closed port must report offline, not throw.");
+}
+
+// Regression: a stop that threw/raced (or a start that failed) could leave a
+// profile in a transient state with no running process. The monitor must report
+// such a server as Stopped, not echo the transient forever (stuck "Stopping…").
+static async Task TestStuckStoppingStatusHealsAsync()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var paths = new AppDataPaths(tempRoot);
+        using var processService = new ServerProcessService(GameProviderRegistry.CreateDefault(), paths);
+        var monitor = new ServerMonitorService(processService, new ServerQueryService());
+
+        var profile = new ServerProfile
+        {
+            Id = Guid.NewGuid().ToString(),
+            GameId = "seven_days_to_die",
+            ProfileName = "stuck-stopping-test",
+            ServerName = "Stuck Stopping Test",
+            Status = ServerStatus.Stopping // stuck transient, nothing actually running
+        };
+
+        var snapshot = await monitor.GetSnapshotAsync(profile);
+        Assert(snapshot.Status == ServerStatus.Stopped,
+            "A non-running server left in Stopping must resolve to Stopped, not stay stuck.");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
 }
 
 static async Task TestServersJsonAddEditDeleteAsync()

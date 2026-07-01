@@ -1,5 +1,12 @@
 # Release Notes
 
+## v4.0.9
+
+### Fixed
+- **Server card stuck on "Stopping…" (and "Starting…")** — if a stop raced with the process already exiting (or a start/stop threw), the card could stay in the transient state forever, with the Stop button disabled. The status monitor now treats any non-running server as **Stopped** instead of echoing a stale transient state, and the stop routine always resolves cleanly out of "Stopping" and no longer errors on the already-exited race. Stopping also runs off the UI thread now, so the app stays responsive while a server shuts down.
+
+---
+
 ## v4.0.8
 
 ### Fixed
