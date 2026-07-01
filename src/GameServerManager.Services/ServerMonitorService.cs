@@ -20,12 +20,16 @@ public sealed class ServerMonitorService
         return await Task.Run(async () =>
         {
             var isRunning = _processService.TryGetProcess(profile, out var process);
-            // A process that isn't running can't be mid-transition. Collapse stale
-            // transient states (Stopping/Starting/Restarting) to Stopped so a stop
-            // or start that threw/raced can never leave the card stuck forever.
+            // If the OS process isn't actually running, the profile can't truthfully
+            // be Running/Starting/Stopping/Restarting — collapse to Stopped so a
+            // crash-on-boot (bad config, missing files, port conflict, etc.) or a
+            // stop/start that threw/raced never leaves the card lying forever.
+            // Stopped/Error/Unknown/Updating are left as-is (Updating tracks a
+            // separate SteamCMD process, not this one).
             var status = isRunning
                 ? ServerStatus.Running
-                : profile.Status is ServerStatus.Stopping or ServerStatus.Starting or ServerStatus.Restarting
+                : profile.Status is ServerStatus.Stopping or ServerStatus.Starting
+                    or ServerStatus.Restarting or ServerStatus.Running
                     ? ServerStatus.Stopped
                     : profile.Status;
             TrackStatusTransition(profile, status);

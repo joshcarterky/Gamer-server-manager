@@ -243,11 +243,19 @@ public sealed class SevenDaysToDieConfigService
 {
     // Properties managed through the launcher flags or the Settings dictionary,
     // NOT written back to serverconfig.xml (they would be overridden on start).
+    // Also includes app-internal metadata that lives in profile.Settings but has
+    // no meaning to the game itself — 7 Days to Die aborts startup on any
+    // unrecognised <property>, so leaking one of these bricks the server.
     private static readonly HashSet<string> _launchOnlyKeys = new(StringComparer.OrdinalIgnoreCase)
     {
         "UserDataFolder",  // controlled via -UserDataFolder launch flag
         "SteamBranch",
-        "CustomSteamBranch"
+        "CustomSteamBranch",
+        "ipAddress",           // app-side query/display host, not a game config option
+        "tags",                // app-side server tags
+        "imported",            // app-side import marker
+        "originalImportPath",  // app-side import marker
+        "importMode"           // app-side import marker
     };
 
     // Legacy V2 gameplay properties superseded by SandboxCode in V3.
@@ -288,6 +296,9 @@ public sealed class SevenDaysToDieConfigService
         {
             if (_launchOnlyKeys.Contains(key))
             {
+                // Also strip it if an older version of the app already wrote it to
+                // disk — an unrecognised <property> aborts 7DtD's startup entirely.
+                doc.RemoveValue(key);
                 continue;
             }
 

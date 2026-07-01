@@ -111,6 +111,7 @@ TestConfigFileSnapshotDrift();
 await TestBackupRestoreSafetyAsync();
 await TestServerQueryClosedPortDoesNotThrowAsync();
 await TestStuckStoppingStatusHealsAsync();
+await TestCrashedOnBootDoesNotStayOnlineAsync();
 
 Console.WriteLine("Provider and server data tests passed.");
 
@@ -185,6 +186,38 @@ static async Task TestStuckStoppingStatusHealsAsync()
         var snapshot = await monitor.GetSnapshotAsync(profile);
         Assert(snapshot.Status == ServerStatus.Stopped,
             "A non-running server left in Stopping must resolve to Stopped, not stay stuck.");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
+}
+
+// Regression: a server that crashed immediately after start (bad config, missing
+// file, port conflict, etc.) must not keep reporting "Running"/Online forever.
+// Nothing else walks profile.Status back once the OS process is gone, so the
+// monitor is the only place that can catch this.
+static async Task TestCrashedOnBootDoesNotStayOnlineAsync()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var paths = new AppDataPaths(tempRoot);
+        using var processService = new ServerProcessService(GameProviderRegistry.CreateDefault(), paths);
+        var monitor = new ServerMonitorService(processService, new ServerQueryService());
+
+        var profile = new ServerProfile
+        {
+            Id = Guid.NewGuid().ToString(),
+            GameId = "seven_days_to_die",
+            ProfileName = "crash-on-boot-test",
+            ServerName = "Crash On Boot Test",
+            Status = ServerStatus.Running // set right after Process.Start(), then the process died
+        };
+
+        var snapshot = await monitor.GetSnapshotAsync(profile);
+        Assert(snapshot.Status == ServerStatus.Stopped,
+            "A server with no live process must never report Running, even if profile.Status says so.");
     }
     finally
     {
@@ -1266,6 +1299,12 @@ static async Task Test7DaysToDieConfigXmlAsync()
         profile.Settings["EACEnabled"] = "false";
         profile.Settings["GameWorld"] = "RWG";
         profile.Settings["SandboxCode"] = "AAAJABJACJADJARFBNC";
+        // App-internal metadata that must never reach the game's config file —
+        // 7 Days to Die aborts startup entirely on any property it doesn't
+        // recognise, so leaking one of these bricks the server on next boot.
+        profile.Settings["ipAddress"] = "0.0.0.0";
+        profile.Settings["tags"] = "pvp,modded";
+        profile.Settings["imported"] = "true";
 
         var svc = new SevenDaysToDieConfigService();
         var profileConfigPath = Path.Combine(tempRoot, "profile-serverconfig.xml");
@@ -1279,6 +1318,19 @@ static async Task Test7DaysToDieConfigXmlAsync()
         Assert(savedDoc.GetValue("GameWorld") == "RWG", "GameWorld must be saved from Settings.");
         Assert(savedDoc.GetValue("SandboxCode") == "AAAJABJACJADJARFBNC", "SandboxCode must be saved.");
         Assert(savedDoc.GetValue("ServerPassword") == "join-secret", "ServerPassword must be saved from profile.Password.");
+        Assert(savedDoc.GetValue("ipAddress") == null, "App-internal ipAddress must never be written to serverconfig.xml.");
+        Assert(savedDoc.GetValue("tags") == null, "App-internal tags must never be written to serverconfig.xml.");
+        Assert(savedDoc.GetValue("imported") == null, "App-internal imported marker must never be written to serverconfig.xml.");
+
+        // A config poisoned by an older app version must be cleaned up on next save.
+        var poisonedPath = Path.Combine(tempRoot, "poisoned-serverconfig.xml");
+        await SevenDaysToDieConfigService.EnsureConfigExistsAsync(poisonedPath);
+        var poisonedDoc = await ServerConfigXmlDocument.LoadAsync(poisonedPath);
+        poisonedDoc.SetValue("ipAddress", "0.0.0.0");
+        await poisonedDoc.SaveAtomicAsync(poisonedPath, createBackup: false);
+        await svc.SaveAsync(profile, poisonedPath, createBackup: false);
+        var healedDoc = await ServerConfigXmlDocument.LoadAsync(poisonedPath);
+        Assert(healedDoc.GetValue("ipAddress") == null, "A previously-poisoned ipAddress property must be removed on save.");
 
         // Load from XML back into a profile
         var loadedProfile = new ServerProfile

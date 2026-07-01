@@ -1,5 +1,12 @@
 # Release Notes
 
+## v4.0.10
+
+### Fixed
+- **7 Days to Die server showed "Online" but was unreachable** — the app was writing its own internal `ipAddress` setting into `serverconfig.xml` as a `<property>`. 7 Days to Die aborts startup entirely on any config property it doesn't recognize, so the server process launched, failed to initialize, and quit within milliseconds — while the card kept showing it as running. Fixed on two levels: internal-only settings (`ipAddress`, `tags`, and import markers) are no longer written to `serverconfig.xml` and are actively stripped from any config file an older version already poisoned; and the status monitor no longer reports a server as Running/Online once its process has actually exited, for any reason (crash-on-boot, bad config, port conflict, etc.) — it now correctly falls back to Stopped so the card and the Start button reflect reality.
+
+---
+
 ## v4.0.9
 
 ### Fixed
