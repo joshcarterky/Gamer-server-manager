@@ -346,14 +346,33 @@
     <!-- ═══ ROOT 2-ROW GRID ═══ -->
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/> <!-- External-change (drift) banner -->
             <RowDefinition Height="Auto"/> <!-- Unsaved changes banner -->
             <RowDefinition Height="*"/>    <!-- Sidebar + Content -->
         </Grid.RowDefinitions>
 
         <!-- ═══════════════════════════════════════════════════════════
-             ROW 0 — UNSAVED CHANGES BANNER
+             ROW 0 — CONFIG DRIFT BANNER (changed on disk, unsaved edits)
              ═══════════════════════════════════════════════════════════ -->
-        <Border Grid.Row="0" Background="#0F1F10" BorderBrush="#1A4A1A" BorderThickness="0,0,0,1" Padding="20,6"
+        <Border Grid.Row="0" Background="#2A1A00" BorderBrush="#7A4E00" BorderThickness="0,0,0,1" Padding="20,8"
+                Visibility="{Binding HasExternalChanges, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#x26A0; " Foreground="#F59E0B" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="Config files were changed outside the app while you have unsaved edits — reload to take them, or keep your changes (they overwrite on the next save)."
+                               Foreground="#FCD34D" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button Content="Reload from Disk" Command="{Binding RevertCommand}" Style="{StaticResource ActionButton}" Margin="0,0,12,0"/>
+                    <Button Content="Keep My Changes" Command="{Binding DismissExternalChangesCommand}" Style="{StaticResource LinkButton}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             ROW 1 — UNSAVED CHANGES BANNER
+             ═══════════════════════════════════════════════════════════ -->
+        <Border Grid.Row="1" Background="#0F1F10" BorderBrush="#1A4A1A" BorderThickness="0,0,0,1" Padding="20,6"
                 Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BooleanToVisibilityConverter}}">
             <Grid>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -368,9 +387,9 @@
         </Border>
 
         <!-- ═══════════════════════════════════════════════════════════
-             ROW 1 — SIDEBAR + MAIN CONTENT
+             ROW 2 — SIDEBAR + MAIN CONTENT
              ═══════════════════════════════════════════════════════════ -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="220"/>  <!-- Sidebar -->
                 <ColumnDefinition Width="*"/>    <!-- Main content -->

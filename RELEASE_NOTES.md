@@ -1,5 +1,17 @@
 # Release Notes
 
+## v4.0.7
+
+### Added
+- **Backups page** — the Backups tab is now a real page. Pick any server to see its backup archives (date, size), and **Create**, **Restore**, **Delete**, or **Open Folder**. Restore is blocked while the server is running, always takes a safety backup of the current files first, and is protected against malicious archive paths (ZIP-slip).
+- **Configuration drift detection** — when a server's config files are changed outside the app, the settings page now shows a banner offering **Reload from File** or **Keep My Changes** instead of silently overwriting. Wired for **7 Days to Die** (serverconfig.xml) and **ARK: Survival Ascended** (GameUserSettings.ini / Game.ini).
+
+### Changed
+- **Server card "More Options"** is now a working menu — **Copy Connection Address**, **Open Install Folder in Explorer**, and **Edit Profile** — replacing the previous placeholder.
+- Backup archive filenames now include milliseconds, so a backup and a restore-time safety backup can never collide within the same second.
+
+---
+
 ## v4.0.6
 
 ### Added

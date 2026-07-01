@@ -44,6 +44,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
     private FileSystemWatcher? _configurationWatcher;
     private DateTime _lastConfigurationWatcherEventUtc = DateTime.MinValue;
     private bool _suppressConfigurationWatcher;
+    private bool _hasExternalChanges;
 
     // RCON Console tab state
     private bool _rconBusy;
@@ -88,6 +89,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         Backups = new ObservableCollection<ArkBackupListItem>();
         SaveCommand = new RelayCommand(async _ => await SaveAsync());
         RevertCommand = new RelayCommand(async _ => await LoadAsync());
+        DismissExternalChangesCommand = new RelayCommand(_ => HasExternalChanges = false);
         ReviewChangesCommand = new RelayCommand(_ => ReviewChanges());
         ResetCategoryCommand = new RelayCommand(_ => ResetSelectedCategory());
         SelectCategoryCommand = new RelayCommand(SelectCategory);
@@ -145,6 +147,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
     public ArkAsaModManagerViewModel Mods { get; }
     public RelayCommand SaveCommand { get; }
     public RelayCommand RevertCommand { get; }
+    public RelayCommand DismissExternalChangesCommand { get; }
     public RelayCommand ReviewChangesCommand { get; }
     public RelayCommand ResetCategoryCommand { get; }
     public RelayCommand SelectCategoryCommand { get; }
@@ -556,6 +559,17 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
     public int RestartRequiredChangesCount => Settings.Count(setting => setting.IsModified && setting.RestartRequired)
         + (ClusterHasUnsavedChanges ? 1 : 0);
     public bool HasUnsavedChanges => Settings.Any(setting => setting.IsModified) || ClusterHasUnsavedChanges || RawGameUserSettings != _loadedRawGameUserSettings || RawGameIni != _loadedRawGameIni;
+
+    /// <summary>
+    /// True when GameUserSettings.ini / Game.ini changed on disk while the user
+    /// has unsaved edits — surfaces a banner offering Reload / Keep my changes.
+    /// (When there are no unsaved edits the watcher reloads automatically.)
+    /// </summary>
+    public bool HasExternalChanges
+    {
+        get => _hasExternalChanges;
+        private set { _hasExternalChanges = value; OnPropertyChanged(); }
+    }
     public string UnsavedChangesText => HasUnsavedChanges
         ? $"{Settings.Count(setting => setting.IsModified)} unsaved setting changes - {RestartRequiredChangesCount} require restart"
         : "All changes saved";
@@ -778,6 +792,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         Mods.LoadFrom(_profile, appSettings);
         NotifyAll();
         RefreshChangeState();
+        HasExternalChanges = false;
         ConfigureConfigurationWatcher();
     }
 
@@ -814,6 +829,7 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
             await SaveRawEditorTextIfChangedAsync();
             await SaveClusterSettingsToServerProfileAsync();
             var result = await new ArkAsaConfigService().SaveAsync(_profile);
+            HasExternalChanges = false;
             Message = $"Saved configs: {Path.GetFileName(result.GameUserSettingsPath)}, {Path.GetFileName(result.GameIniPath)}";
             await LoadAsync();
         }
@@ -1257,7 +1273,8 @@ public sealed class ArkAsaSettingsViewModel : BaseViewModel
         {
             if (HasUnsavedChanges)
             {
-                Message = $"{Path.GetFileName(path)} changed on disk while you have unsaved changes. Use Reload from Disk or review pending changes before saving.";
+                HasExternalChanges = true;
+                Message = $"{Path.GetFileName(path)} changed on disk while you have unsaved changes. Reload from disk or keep your changes.";
                 return;
             }
 

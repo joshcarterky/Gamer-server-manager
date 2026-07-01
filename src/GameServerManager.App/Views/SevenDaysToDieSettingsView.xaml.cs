@@ -18,12 +18,21 @@ public partial class SevenDaysToDieSettingsView : UserControl
 
         // Wire PasswordBox controls after the visual tree is ready
         Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (_vm == null) return;
         WirePasswordBoxes(this, _vm);
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        // Navigating away creates a fresh view next time, so tear down the
+        // config-file watcher and timers held by the view model.
+        _vm?.Dispose();
+        _vm = null;
     }
 
     // ── PasswordBox two-way binding (WPF PasswordBox doesn't support binding) ──

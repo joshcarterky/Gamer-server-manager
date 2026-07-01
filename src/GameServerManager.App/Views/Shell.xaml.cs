@@ -267,6 +267,7 @@ namespace GameServerManager.App.Views
                 "Deploy" => new DeployView(),
                 "Monitoring" => new MonitoringView(),
                 "Scheduler" => new SchedulerView(),
+                "Backups" => new BackupsView(),
                 _ => CreatePlaceholderPage(pageName)
             };
         }

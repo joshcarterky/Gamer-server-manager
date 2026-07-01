@@ -188,7 +188,7 @@ public sealed record CrossplayCheck(string Name, bool Passed, string? FixHint);
 
 // ─── Main ViewModel ───────────────────────────────────────────────────────────
 
-public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel
+public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel, IDisposable
 {
     private readonly ServerProfile _profile;
     private readonly SevenDaysToDieConfigService _configService = new();
@@ -204,6 +204,8 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel
     private bool _isBusy;
     private DateTime? _lastSavedAt;
     private System.Windows.Threading.DispatcherTimer? _validationTimer;
+    private ConfigFileWatcher? _configWatcher;
+    private bool _hasExternalChanges;
 
     public SevenDaysToDieSettingsViewModel(ServerProfile profile, IGameServerProvider provider)
     {
@@ -253,8 +255,14 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel
         });
         ApplyCrossplaySettingsCommand = new RelayCommand(_ => ApplyCrossplaySettings());
         CopyConfigPathCommand = new RelayCommand(_ => Clipboard.SetText(ConfigFilePath));
+        DismissExternalChangesCommand = new RelayCommand(_ => HasExternalChanges = false);
 
         RunValidation();
+
+        // Watch serverconfig.xml for edits made outside the app (drift detection).
+        _configWatcher = new ConfigFileWatcher(ConfigFilePath);
+        _configWatcher.DriftDetected += OnConfigDrift;
+        _configWatcher.Start();
     }
 
     // ── Read-only server metadata ─────────────────────────────────────────────
@@ -397,6 +405,42 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel
     public RelayCommand OpenConfigFolderCommand { get; }
     public RelayCommand ApplyCrossplaySettingsCommand { get; }
     public RelayCommand CopyConfigPathCommand { get; }
+    public RelayCommand DismissExternalChangesCommand { get; }
+
+    // ── Config drift (file changed outside the app) ───────────────────────────
+
+    /// <summary>
+    /// True when serverconfig.xml was modified on disk by something other than
+    /// this app while the page was open. Surfaces a banner offering Reload /
+    /// Keep my changes — we never silently overwrite external edits.
+    /// </summary>
+    public bool HasExternalChanges
+    {
+        get => _hasExternalChanges;
+        private set { _hasExternalChanges = value; OnPropertyChanged(); }
+    }
+
+    private void OnConfigDrift(object? sender, EventArgs e)
+    {
+        HasExternalChanges = true;
+        SetStatus("serverconfig.xml was changed outside the app — reload or keep your changes.", error: false);
+    }
+
+    public void Dispose()
+    {
+        if (_configWatcher != null)
+        {
+            _configWatcher.DriftDetected -= OnConfigDrift;
+            _configWatcher.Dispose();
+            _configWatcher = null;
+        }
+
+        if (_validationTimer != null)
+        {
+            _validationTimer.Stop();
+            _validationTimer = null;
+        }
+    }
 
     // ── Save ──────────────────────────────────────────────────────────────────
 
@@ -416,6 +460,10 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel
 
             // Also persist to servers.json (app's own database)
             await _serversJsonService.UpdateServerAsync(_profile);
+
+            // Re-baseline so this write isn't reported back to us as external drift.
+            _configWatcher?.MarkSynced();
+            HasExternalChanges = false;
 
             LastSavedAt = DateTime.Now;
             SetStatus($"Saved — {AllItems.Count} settings written.", error: false);
@@ -458,6 +506,8 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel
         {
             await _configService.LoadAsync(_profile, ConfigFilePath);
             RefreshItemsFromProfile();
+            _configWatcher?.MarkSynced();
+            HasExternalChanges = false;
             SetStatus("Reloaded from serverconfig.xml.", error: false);
             RunValidation();
         }

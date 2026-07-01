@@ -979,12 +979,48 @@ public class ServersViewModel : BaseViewModel, IDisposable
             return;
         }
 
-        MessageBox.Show(
-            "Not implemented yet: advanced server actions will appear in this menu.",
-            "More Options",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
-        Message = $"More options are not implemented yet for {server.ServerName}.";
+        // Real overflow menu of actions that aren't already one-click on the card.
+        // Opens at the mouse (ContextMenu default placement = MousePoint), i.e. on the
+        // "More Options" button the user just clicked.
+        var menu = new System.Windows.Controls.ContextMenu();
+
+        menu.Items.Add(BuildMoreOptionsItem("Copy Connection Address", () =>
+        {
+            try
+            {
+                Clipboard.SetText(server.Endpoint);
+                Message = $"Copied connection address {server.Endpoint} to the clipboard.";
+            }
+            catch (Exception ex)
+            {
+                Message = $"Could not copy the connection address: {ex.Message}";
+            }
+        }));
+
+        menu.Items.Add(BuildMoreOptionsItem("Open Install Folder in Explorer", () =>
+        {
+            try
+            {
+                OpenFolder(server);
+            }
+            catch (Exception ex)
+            {
+                Message = $"Could not open the install folder: {ex.Message}";
+            }
+        }));
+
+        menu.Items.Add(new System.Windows.Controls.Separator());
+
+        menu.Items.Add(BuildMoreOptionsItem("Edit Profile…", () => Edit(server)));
+
+        menu.IsOpen = true;
+    }
+
+    private static System.Windows.Controls.MenuItem BuildMoreOptionsItem(string header, Action onClick)
+    {
+        var item = new System.Windows.Controls.MenuItem { Header = header };
+        item.Click += (_, _) => onClick();
+        return item;
     }
 
     private async Task ToggleFavoriteAsync(ServerCardViewModel? server)

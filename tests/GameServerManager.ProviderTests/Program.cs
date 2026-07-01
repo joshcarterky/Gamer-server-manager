@@ -7,6 +7,7 @@ using GameServerManager.Services.Diagnostics;
 using GameServerManager.Services.Repositories;
 using GameServerManager.Services.SevenDaysToDie;
 using GameServerManager.Services.Updates;
+using System.IO.Compression;
 using System.Xml.Linq;
 
 var registry = GameProviderRegistry.CreateDefault();
@@ -106,6 +107,8 @@ Test7DaysToDieWebDashboardSettings();
 await Test7DaysToDieXmlPreservesUnknownPropertiesAsync();
 Test7DaysToDieSandboxCodeRoundTrip();
 TestGameArtworkMapping();
+TestConfigFileSnapshotDrift();
+await TestBackupRestoreSafetyAsync();
 
 Console.WriteLine("Provider and server data tests passed.");
 
@@ -1601,6 +1604,97 @@ static void Test7DaysToDieSandboxCodeRoundTrip()
     Assert(SandboxCodeHelpers.IsSensitive("ServerPassword"), "ServerPassword must be sensitive.");
     Assert(SandboxCodeHelpers.IsSensitive("TelnetPassword"), "TelnetPassword must be sensitive.");
     Assert(SandboxCodeHelpers.IsSensitive("ControlPanelPassword"), "ControlPanelPassword must be sensitive.");
+}
+
+static async Task TestBackupRestoreSafetyAsync()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var source = Path.Combine(tempRoot, "ServerFiles");
+        Directory.CreateDirectory(source);
+        File.WriteAllText(Path.Combine(source, "world.dat"), "ORIGINAL");
+
+        var backupDir = Path.Combine(tempRoot, "Backups");
+        var svc = new BackupService(new AppDataPaths(tempRoot));
+        var profile = new ServerProfile
+        {
+            Id = "backup-test",
+            GameId = "seven_days_to_die",
+            ProfileName = "Backup Test",
+            InstallPath = source
+        };
+        profile.Settings["backupDirectory"] = backupDir;
+
+        // Create + list
+        var zip = await svc.BackupServerAsync(profile);
+        Assert(File.Exists(zip), "Backup archive must be created.");
+        Assert(svc.ListBackups(profile).Count == 1, "ListBackups must return the new backup.");
+
+        // Round-trip: change the file, restore, expect original content back
+        File.WriteAllText(Path.Combine(source, "world.dat"), "CHANGED");
+        var result = await svc.RestoreServerAsync(profile, zip);
+        Assert(result.Success, $"Restore must succeed: {result.Message}");
+        Assert(File.ReadAllText(Path.Combine(source, "world.dat")) == "ORIGINAL",
+            "Restore must bring back the original file content.");
+        Assert(result.SafetyBackupPath != null && File.Exists(result.SafetyBackupPath),
+            "Restore must take a safety backup of the pre-restore state.");
+
+        // ZIP-slip: a backup containing an escaping entry must be refused and write nothing outside
+        var evilZip = Path.Combine(tempRoot, "evil.zip");
+        using (var fs = File.Create(evilZip))
+        using (var archive = new ZipArchive(fs, ZipArchiveMode.Create))
+        {
+            var entry = archive.CreateEntry("../escaped.txt");
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write("pwned");
+        }
+
+        var escapedTarget = Path.GetFullPath(Path.Combine(tempRoot, "..", "escaped.txt"));
+        var evilResult = await svc.RestoreServerAsync(profile, evilZip);
+        Assert(!evilResult.Success, "Restore of a ZIP-slip archive must fail.");
+        Assert(!File.Exists(escapedTarget), "ZIP-slip entry must not be written outside the restore root.");
+        if (File.Exists(escapedTarget)) File.Delete(escapedTarget); // cleanup if somehow created
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
+}
+
+static void TestConfigFileSnapshotDrift()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var path = Path.Combine(tempRoot, "serverconfig.xml");
+        File.WriteAllText(path, "<ServerSettings><property name=\"ServerName\" value=\"A\" /></ServerSettings>");
+
+        var baseline = ConfigFileSnapshot.Compute(path);
+        Assert(baseline.Length > 0, "Snapshot of an existing file must be non-empty.");
+
+        // Stable for identical content (no false-positive drift on our own writes)
+        Assert(ConfigFileSnapshot.Compute(path) == baseline, "Snapshot must be stable for unchanged content.");
+        Assert(!ConfigFileSnapshot.HasDrifted(baseline, path), "Unchanged file must not report drift.");
+
+        // External edit → drift
+        File.WriteAllText(path, "<ServerSettings><property name=\"ServerName\" value=\"B\" /></ServerSettings>");
+        Assert(ConfigFileSnapshot.Compute(path) != baseline, "Changed content must produce a different snapshot.");
+        Assert(ConfigFileSnapshot.HasDrifted(baseline, path), "Externally edited file must report drift.");
+
+        // Re-baseline after a 'save' clears the drift signal
+        var rebaselined = ConfigFileSnapshot.Compute(path);
+        Assert(!ConfigFileSnapshot.HasDrifted(rebaselined, path), "Re-baselined snapshot must not report drift.");
+
+        // Deletion → drift; missing file hashes to empty
+        File.Delete(path);
+        Assert(ConfigFileSnapshot.Compute(path).Length == 0, "Missing file must hash to empty string.");
+        Assert(ConfigFileSnapshot.HasDrifted(rebaselined, path), "Deleting a watched file must report drift.");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
 }
 
 static void TestGameArtworkMapping()
