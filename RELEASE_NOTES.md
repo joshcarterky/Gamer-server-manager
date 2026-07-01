@@ -1,5 +1,12 @@
 # Release Notes
 
+## v4.0.11
+
+### Fixed
+- **Clicking Start silently did nothing when it failed** — Start/Stop/Restart failures were only ever reported in a tiny 11px status line at the bottom of the window, easy to miss entirely. A failed start now also pops up an error dialog with the actual reason, so a failure is never mistaken for the button doing nothing.
+
+---
+
 ## v4.0.10
 
 ### Fixed

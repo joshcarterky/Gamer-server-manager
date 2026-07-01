@@ -689,6 +689,10 @@ public class ServersViewModel : BaseViewModel, IDisposable
         catch (Exception ex)
         {
             Message = $"Start failed: {ex.Message}";
+            // The status bar text is easy to miss, and a failed start otherwise
+            // looks like nothing happened at all — make the failure undeniable.
+            MessageBox.Show($"Failed to start '{server.ServerName}':\n\n{ex.Message}",
+                "Start Failed", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -725,6 +729,8 @@ public class ServersViewModel : BaseViewModel, IDisposable
         catch (Exception ex)
         {
             Message = $"Stop failed: {ex.Message}";
+            MessageBox.Show($"Failed to stop '{server.ServerName}':\n\n{ex.Message}",
+                "Stop Failed", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -761,6 +767,8 @@ public class ServersViewModel : BaseViewModel, IDisposable
         catch (Exception ex)
         {
             Message = $"Restart failed: {ex.Message}";
+            MessageBox.Show($"Failed to restart '{server.ServerName}':\n\n{ex.Message}",
+                "Restart Failed", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
