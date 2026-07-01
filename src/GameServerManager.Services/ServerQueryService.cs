@@ -90,7 +90,10 @@ public class ServerQueryService
             throw new OperationCanceledException(cancellationToken);
         }
 
-        return receiveTask.Result.Buffer;
+        // await (not .Result): a faulted receive must surface its SocketException
+        // directly so the caller's catch handles it. .Result wraps it in an
+        // AggregateException that slips past the catch and crashes the app.
+        return (await receiveTask).Buffer;
     }
 
     private static byte[] BuildA2SInfoRequest(int? challenge)

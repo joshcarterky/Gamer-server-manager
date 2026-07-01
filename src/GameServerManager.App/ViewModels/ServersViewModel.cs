@@ -1161,6 +1161,12 @@ public class ServersViewModel : BaseViewModel, IDisposable
             ApplyFilters();
             NotifyServerCollectionChanged();
         }
+        catch (Exception ex)
+        {
+            // This runs from an async-void timer tick; an escaped exception would
+            // hit DispatcherUnhandledException and spam an error dialog every tick.
+            Message = $"Monitoring refresh failed: {ex.Message}";
+        }
         finally
         {
             _isMonitoringRefreshRunning = false;

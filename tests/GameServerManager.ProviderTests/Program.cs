@@ -109,6 +109,7 @@ Test7DaysToDieSandboxCodeRoundTrip();
 TestGameArtworkMapping();
 TestConfigFileSnapshotDrift();
 await TestBackupRestoreSafetyAsync();
+await TestServerQueryClosedPortDoesNotThrowAsync();
 
 Console.WriteLine("Provider and server data tests passed.");
 
@@ -132,6 +133,31 @@ static async Task TestRepositorySaveLoadAsync()
     {
         DeleteTempRoot(tempRoot);
     }
+}
+
+// Regression: querying a booting server hits a closed UDP port. On Windows the
+// next receive fails with WSAECONNRESET ("An existing connection was forcibly
+// closed by the remote host"). This must be caught, not surface as an
+// AggregateException that crashes the monitoring timer with dialog spam.
+static async Task TestServerQueryClosedPortDoesNotThrowAsync()
+{
+    var profile = new ServerProfile
+    {
+        Id = Guid.NewGuid().ToString(),
+        GameId = "seven_days_to_die",
+        ProfileName = "query-crash-test",
+        ServerName = "Query Crash Test",
+        MaxPlayers = 8,
+        Ports = new List<ServerPort>
+        {
+            // Almost certainly nothing listening here → forces the reset path.
+            new() { Name = "Query", Port = 26903, Protocol = PortProtocol.UDP }
+        }
+    };
+    profile.Settings["ipAddress"] = "127.0.0.1";
+
+    var result = await new ServerQueryService().QueryAsync(profile);
+    Assert(!result.Online, "Query to a closed port must report offline, not throw.");
 }
 
 static async Task TestServersJsonAddEditDeleteAsync()

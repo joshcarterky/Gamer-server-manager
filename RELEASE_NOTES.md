@@ -1,5 +1,12 @@
 # Release Notes
 
+## v4.0.8
+
+### Fixed
+- **Cascading "An existing connection was forcibly closed by the remote host" error dialogs when starting a server** — while a server was still booting, the status monitor's Steam query hit a not-yet-listening UDP port, which on Windows returns a connection-reset error. That error was wrapped in an `AggregateException` that slipped past the query's error handling and crashed the monitoring timer, spawning a new error dialog every few seconds. The query now surfaces and swallows the socket error correctly, and the monitor loop can no longer spam dialogs if a future refresh fails.
+
+---
+
 ## v4.0.7
 
 ### Added
