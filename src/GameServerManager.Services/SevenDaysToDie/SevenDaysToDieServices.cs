@@ -267,7 +267,12 @@ public sealed class SevenDaysToDieConfigService
         "rconPassword",        // app-side RCON UI field (real key is TelnetPassword)
         "imported",            // app-side import marker
         "originalImportPath",  // app-side import marker
-        "importMode"           // app-side import marker
+        "importMode",          // app-side import marker
+        // ServerAdminPassword was never a real serverconfig.xml property (verified
+        // against the current V3 property reference) and has been removed from
+        // SettingsDefinitions. Kept here so a profile that already saved one gets
+        // it silently stripped from serverconfig.xml instead of crashing on boot.
+        "ServerAdminPassword"
     };
 
     // Legacy V2 gameplay properties superseded by SandboxCode in V3.
@@ -280,7 +285,8 @@ public sealed class SevenDaysToDieConfigService
         "EnemySpawnMode", "EnemyDifficulty", "ZombieFeralSense",
         "ZombieMove", "ZombieMoveNight", "ZombieFeralMove", "ZombieBMMove",
         "AISmellMode", "BloodMoonFrequency", "BloodMoonRange", "BloodMoonWarning",
-        "BloodMoonEnemyCount", "LootAbundance", "LootRespawnDays"
+        "BloodMoonEnemyCount", "LootAbundance", "LootRespawnDays",
+        "AirDropFrequency", "AirDropMarker", "QuestProgressionDailyLimit"
     };
 
     /// <summary>
@@ -315,8 +321,11 @@ public sealed class SevenDaysToDieConfigService
             }
 
             // Don't write V2 gameplay keys into V3 configs when SandboxCode is set.
+            // Also strip one already on disk (e.g. from an imported V2 config) —
+            // V3 rejects all of these as unrecognised properties.
             if (IsV3Config(profile) && LegacyV2GameplayKeys.Contains(key))
             {
+                doc.RemoveValue(key);
                 continue;
             }
 

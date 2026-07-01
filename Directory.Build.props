@@ -1,8 +1,8 @@
 <Project>
   <PropertyGroup>
-    <VersionPrefix>4.0.12</VersionPrefix>
-    <AssemblyVersion>4.0.12.0</AssemblyVersion>
-    <FileVersion>4.0.12.0</FileVersion>
+    <VersionPrefix>4.0.13</VersionPrefix>
+    <AssemblyVersion>4.0.13.0</AssemblyVersion>
+    <FileVersion>4.0.13.0</FileVersion>
     <Company>Nexus Server Manager Contributors</Company>
     <Product>Nexus Server Manager</Product>
     <RepositoryUrl>https://github.com/joshcarterky/Gamer-server-manager</RepositoryUrl>

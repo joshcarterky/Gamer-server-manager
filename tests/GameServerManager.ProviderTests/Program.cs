@@ -1313,6 +1313,14 @@ static async Task Test7DaysToDieConfigXmlAsync()
         profile.Settings["autoRestart"] = "true";
         profile.Settings["rconPassword"] = "secret";
         profile.Settings["imported"] = "true";
+        // ServerAdminPassword was never a real serverconfig.xml property (confirmed
+        // against the official V3 property reference) and must stay excluded.
+        profile.Settings["ServerAdminPassword"] = "admin-secret";
+        // Legacy V2 gameplay keys removed in V3 (encoded into SandboxCode instead)
+        // must never be written back once SandboxCode is set.
+        profile.Settings["AirDropFrequency"] = "72";
+        profile.Settings["AirDropMarker"] = "true";
+        profile.Settings["QuestProgressionDailyLimit"] = "0";
 
         var svc = new SevenDaysToDieConfigService();
         var profileConfigPath = Path.Combine(tempRoot, "profile-serverconfig.xml");
@@ -1329,22 +1337,30 @@ static async Task Test7DaysToDieConfigXmlAsync()
         string[] appInternalKeys =
         [
             "ipAddress", "description", "tags", "serverPath", "saveDirectory",
-            "backupDirectory", "cpuLimitPercent", "autoRestart", "rconPassword", "imported"
+            "backupDirectory", "cpuLimitPercent", "autoRestart", "rconPassword", "imported",
+            "ServerAdminPassword", "AirDropFrequency", "AirDropMarker", "QuestProgressionDailyLimit"
         ];
         foreach (var key in appInternalKeys)
         {
             Assert(savedDoc.GetValue(key) == null, $"App-internal '{key}' must never be written to serverconfig.xml.");
         }
+        GameProviderRegistry.CreateDefault().TryGetProvider("seven_days_to_die", out var sevenDaysProvider);
+        Assert(!sevenDaysProvider!.SettingsDefinitions.Any(s =>
+                s.SettingKey.Equals("ServerAdminPassword", StringComparison.OrdinalIgnoreCase)),
+            "ServerAdminPassword is not a real 7DtD property and must not be offered as a setting.");
 
         // A config poisoned by an older app version must be cleaned up on next save.
         var poisonedPath = Path.Combine(tempRoot, "poisoned-serverconfig.xml");
         await SevenDaysToDieConfigService.EnsureConfigExistsAsync(poisonedPath);
         var poisonedDoc = await ServerConfigXmlDocument.LoadAsync(poisonedPath);
         poisonedDoc.SetValue("ipAddress", "0.0.0.0");
+        poisonedDoc.SetValue("AirDropFrequency", "72"); // e.g. inherited from an imported V2 config
         await poisonedDoc.SaveAtomicAsync(poisonedPath, createBackup: false);
         await svc.SaveAsync(profile, poisonedPath, createBackup: false);
         var healedDoc = await ServerConfigXmlDocument.LoadAsync(poisonedPath);
         Assert(healedDoc.GetValue("ipAddress") == null, "A previously-poisoned ipAddress property must be removed on save.");
+        Assert(healedDoc.GetValue("AirDropFrequency") == null,
+            "A V2 legacy property already on disk must be removed once the config is V3 (SandboxCode set).");
 
         // Load from XML back into a profile
         var loadedProfile = new ServerProfile

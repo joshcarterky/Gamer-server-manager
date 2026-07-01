@@ -156,11 +156,6 @@ public class SevenDaysToDieProvider : GameServerProviderBase
             description: "Password required to join. Leave blank for a public open server.",
             helpText: "Passwords are case-sensitive. Communicate the password to your players through a separate channel. The password appears in serverconfig.xml — keep the file access-controlled."),
 
-        Password("ServerAdminPassword",
-            "Admin Password", "", category: "Security",
-            description: "In-game admin command password. Used with the 'admin' command to grant yourself admin rights.",
-            helpText: "Type 'admin add <password>' in the in-game console to grant yourself admin rights. This is separate from the Telnet password."),
-
         Toggle("EACEnabled",
             "Easy Anti-Cheat (EAC)", "True", category: "Security",
             description: "Enables Easy Anti-Cheat. Required for crossplay. Disable only for private or heavily modded servers.",

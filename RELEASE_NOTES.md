@@ -1,5 +1,12 @@
 # Release Notes
 
+## v4.0.13
+
+### Fixed
+- **7 Days to Die still failed to start after v4.0.12** — this time the cause was different: `ServerAdminPassword`, one of the settings in the app's own 7DtD settings panel, was never a real serverconfig.xml property (verified against the current official V3 property reference). It's been removed from the settings panel and is now stripped from any config that already has it. Also added three more V3-removed legacy properties (`AirDropFrequency`, `AirDropMarker`, `QuestProgressionDailyLimit`) to the set that's never written back once a server has a Sandbox Code — they were encoded into SandboxCode in V3.0 and, like the other 26 already handled, will abort startup if written directly.
+
+---
+
 ## v4.0.12
 
 ### Fixed
