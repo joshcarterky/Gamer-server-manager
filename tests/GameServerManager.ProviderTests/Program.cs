@@ -1321,6 +1321,8 @@ static async Task Test7DaysToDieConfigXmlAsync()
         profile.Settings["ControlPanelEnabled"] = "true";
         profile.Settings["ControlPanelPort"] = "8080";
         profile.Settings["ControlPanelPassword"] = "secret";
+        // SaveGameFolder is rejected by the current build ("Unknown config option").
+        profile.Settings["SaveGameFolder"] = @"C:\Saves\Override";
         // Legacy V2 gameplay keys removed in V3 (encoded into SandboxCode instead)
         // must never be written back once SandboxCode is set.
         profile.Settings["AirDropFrequency"] = "72";
@@ -1344,14 +1346,14 @@ static async Task Test7DaysToDieConfigXmlAsync()
             "ipAddress", "description", "tags", "serverPath", "saveDirectory",
             "backupDirectory", "cpuLimitPercent", "autoRestart", "rconPassword", "imported",
             "ServerAdminPassword", "ControlPanelEnabled", "ControlPanelPort", "ControlPanelPassword",
-            "AirDropFrequency", "AirDropMarker", "QuestProgressionDailyLimit"
+            "SaveGameFolder", "AirDropFrequency", "AirDropMarker", "QuestProgressionDailyLimit"
         ];
         foreach (var key in appInternalKeys)
         {
             Assert(savedDoc.GetValue(key) == null, $"App-internal '{key}' must never be written to serverconfig.xml.");
         }
         GameProviderRegistry.CreateDefault().TryGetProvider("seven_days_to_die", out var sevenDaysProvider);
-        string[] retiredSettingKeys = ["ServerAdminPassword", "ControlPanelEnabled", "ControlPanelPort", "ControlPanelPassword"];
+        string[] retiredSettingKeys = ["ServerAdminPassword", "ControlPanelEnabled", "ControlPanelPort", "ControlPanelPassword", "SaveGameFolder"];
         foreach (var key in retiredSettingKeys)
         {
             Assert(!sevenDaysProvider!.SettingsDefinitions.Any(s => s.SettingKey.Equals(key, StringComparison.OrdinalIgnoreCase)),

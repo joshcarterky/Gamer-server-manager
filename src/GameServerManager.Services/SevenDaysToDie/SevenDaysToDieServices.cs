@@ -277,7 +277,11 @@ public sealed class SevenDaysToDieConfigService
         // by WebDashboardEnabled/Port/Url. Same self-heal treatment.
         "ControlPanelEnabled",
         "ControlPanelPort",
-        "ControlPanelPassword"
+        "ControlPanelPassword",
+        // SaveGameFolder is rejected as "Unknown config option" by the current
+        // V3.0.0 (b259) build, confirmed directly from a live server's own log —
+        // more authoritative than general docs, which may describe an older build.
+        "SaveGameFolder"
     };
 
     // Legacy V2 gameplay properties superseded by SandboxCode in V3.

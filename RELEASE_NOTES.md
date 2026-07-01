@@ -1,5 +1,12 @@
 # Release Notes
 
+## v4.0.15
+
+### Fixed
+- **7 Days to Die still failed to start after v4.0.14** — `SaveGameFolder` is rejected as "Unknown config option" by the currently installed build. Removed from the settings panel and stripped from any config that already has it, same as the previous retired/invented properties.
+
+---
+
 ## v4.0.14
 
 ### Fixed

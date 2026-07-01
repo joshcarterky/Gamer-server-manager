@@ -236,11 +236,6 @@ public class SevenDaysToDieProvider : GameServerProviderBase
             helpText: "Specifying an explicit path is recommended when running multiple servers — it ensures data isolation. The folder is passed via the -UserDataFolder launch flag, not via serverconfig.xml.",
             placeholder: "C:\\GameServers\\7dtd-server1\\UserData"),
 
-        Text("SaveGameFolder",
-            "Save Game Folder Override", "", category: "Data & Storage",
-            description: "Override path for save games. Leave blank to use the default path inside UserDataFolder.",
-            advanced: true),
-
         Number("MaxUncoveredMapChunksPerPlayer",
             "Max Map Chunks Per Player", "131072", min: 0, max: 1000000, unit: "chunks", category: "Data & Storage",
             description: "Maximum map chunks a single player can uncover. Lower values reduce server memory consumption.",
