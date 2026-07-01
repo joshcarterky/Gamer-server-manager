@@ -1316,6 +1316,11 @@ static async Task Test7DaysToDieConfigXmlAsync()
         // ServerAdminPassword was never a real serverconfig.xml property (confirmed
         // against the official V3 property reference) and must stay excluded.
         profile.Settings["ServerAdminPassword"] = "admin-secret";
+        // ControlPanelEnabled/Port/Password were retired in Alpha 21, replaced by
+        // WebDashboardEnabled/Port/Url. Must never be written.
+        profile.Settings["ControlPanelEnabled"] = "true";
+        profile.Settings["ControlPanelPort"] = "8080";
+        profile.Settings["ControlPanelPassword"] = "secret";
         // Legacy V2 gameplay keys removed in V3 (encoded into SandboxCode instead)
         // must never be written back once SandboxCode is set.
         profile.Settings["AirDropFrequency"] = "72";
@@ -1338,16 +1343,20 @@ static async Task Test7DaysToDieConfigXmlAsync()
         [
             "ipAddress", "description", "tags", "serverPath", "saveDirectory",
             "backupDirectory", "cpuLimitPercent", "autoRestart", "rconPassword", "imported",
-            "ServerAdminPassword", "AirDropFrequency", "AirDropMarker", "QuestProgressionDailyLimit"
+            "ServerAdminPassword", "ControlPanelEnabled", "ControlPanelPort", "ControlPanelPassword",
+            "AirDropFrequency", "AirDropMarker", "QuestProgressionDailyLimit"
         ];
         foreach (var key in appInternalKeys)
         {
             Assert(savedDoc.GetValue(key) == null, $"App-internal '{key}' must never be written to serverconfig.xml.");
         }
         GameProviderRegistry.CreateDefault().TryGetProvider("seven_days_to_die", out var sevenDaysProvider);
-        Assert(!sevenDaysProvider!.SettingsDefinitions.Any(s =>
-                s.SettingKey.Equals("ServerAdminPassword", StringComparison.OrdinalIgnoreCase)),
-            "ServerAdminPassword is not a real 7DtD property and must not be offered as a setting.");
+        string[] retiredSettingKeys = ["ServerAdminPassword", "ControlPanelEnabled", "ControlPanelPort", "ControlPanelPassword"];
+        foreach (var key in retiredSettingKeys)
+        {
+            Assert(!sevenDaysProvider!.SettingsDefinitions.Any(s => s.SettingKey.Equals(key, StringComparison.OrdinalIgnoreCase)),
+                $"'{key}' is not a real current 7DtD property and must not be offered as a setting.");
+        }
 
         // A config poisoned by an older app version must be cleaned up on next save.
         var poisonedPath = Path.Combine(tempRoot, "poisoned-serverconfig.xml");
@@ -1635,9 +1644,10 @@ static void Test7DaysToDieWebDashboardSettings()
     var registry = GameProviderRegistry.CreateDefault();
     registry.TryGetProvider("seven_days_to_die", out var provider);
 
-    // Web dashboard settings must coexist with old control panel settings
-    Assert(provider.SettingsDefinitions.Any(s => s.SettingKey == "ControlPanelEnabled"),
-        "Legacy ControlPanelEnabled must still be present.");
+    // The old Control Panel (ControlPanelEnabled/Port/Password) was retired in
+    // Alpha 21 and must NOT be offered — only the modern Web Dashboard remains.
+    Assert(!provider.SettingsDefinitions.Any(s => s.SettingKey == "ControlPanelEnabled"),
+        "Retired ControlPanelEnabled must not be present.");
     Assert(provider.SettingsDefinitions.Any(s => s.SettingKey == "WebDashboardEnabled"),
         "Modern WebDashboardEnabled must be present.");
 

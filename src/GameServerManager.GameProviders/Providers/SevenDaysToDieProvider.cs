@@ -178,23 +178,9 @@ public class SevenDaysToDieProvider : GameServerProviderBase
             description: "File name for the admin list containing bans, whitelists, and permission levels.",
             helpText: "This file is stored in the UserData folder. Do not rename it unless you have a specific reason — the game expects 'serveradmin.xml' by default."),
 
-        // ── Web Control Panel ─────────────────────────────────────────────────────
-        Toggle("ControlPanelEnabled",
-            "Enable Web Control Panel", "False", category: "Web & Dashboard",
-            description: "Enables the built-in HTTP control panel accessible in a browser.",
-            helpText: "The control panel provides a web interface for basic server administration. Never expose this port publicly without a strong password."),
-
-        Number("ControlPanelPort",
-            "Control Panel Port", "8080", min: 1, max: 65535, unit: "port", category: "Web & Dashboard",
-            description: "HTTP port for the web control panel.",
-            helpText: "Must not conflict with the game port or Telnet port. Ensure this port is protected by a firewall if accessible from the internet."),
-
-        Password("ControlPanelPassword",
-            "Control Panel Password", "", category: "Web & Dashboard",
-            description: "Password for the web control panel. Leave blank only on trusted private networks.",
-            helpText: "A blank password allows unauthenticated access to the control panel from the local network. On internet-connected servers, always set a strong password."),
-
-        // Web Dashboard (V1.0+ / modern builds) — shown only when detected
+        // Web Dashboard — replaced the old "Control Panel" (ControlPanelEnabled/
+        // ControlPanelPort/ControlPanelPassword) back in Alpha 21. Those properties
+        // are gone from the current schema and abort startup if written.
         Toggle("WebDashboardEnabled",
             "Enable Web Dashboard", "False", category: "Web & Dashboard",
             description: "Enables the modern web dashboard (available in newer server builds).",

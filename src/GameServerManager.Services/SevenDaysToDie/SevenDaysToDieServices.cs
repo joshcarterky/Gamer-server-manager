@@ -272,7 +272,12 @@ public sealed class SevenDaysToDieConfigService
         // against the current V3 property reference) and has been removed from
         // SettingsDefinitions. Kept here so a profile that already saved one gets
         // it silently stripped from serverconfig.xml instead of crashing on boot.
-        "ServerAdminPassword"
+        "ServerAdminPassword",
+        // ControlPanelEnabled/Port/Password were retired back in Alpha 21, replaced
+        // by WebDashboardEnabled/Port/Url. Same self-heal treatment.
+        "ControlPanelEnabled",
+        "ControlPanelPort",
+        "ControlPanelPassword"
     };
 
     // Legacy V2 gameplay properties superseded by SandboxCode in V3.

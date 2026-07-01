@@ -1,5 +1,12 @@
 # Release Notes
 
+## v4.0.14
+
+### Fixed
+- **7 Days to Die still failed to start after v4.0.13** — the "Web Control Panel" settings (`ControlPanelEnabled`, `ControlPanelPort`, `ControlPanelPassword`) were retired by the game back in Alpha 21, replaced entirely by the "Web Dashboard" settings the app already has. They're removed from the settings panel and stripped from any config that already has them. This round was cross-checked against two independent current (2026) sources covering the full property schema, rather than fixed one property at a time.
+
+---
+
 ## v4.0.13
 
 ### Fixed
