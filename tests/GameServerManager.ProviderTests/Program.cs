@@ -1299,11 +1299,19 @@ static async Task Test7DaysToDieConfigXmlAsync()
         profile.Settings["EACEnabled"] = "false";
         profile.Settings["GameWorld"] = "RWG";
         profile.Settings["SandboxCode"] = "AAAJABJACJADJARFBNC";
-        // App-internal metadata that must never reach the game's config file —
-        // 7 Days to Die aborts startup entirely on any property it doesn't
-        // recognise, so leaking one of these bricks the server on next boot.
+        // App-internal metadata (the full set AddServerWizardViewModel.CreateProfile
+        // stores into profile.Settings) that must never reach the game's config
+        // file — 7 Days to Die aborts startup entirely on any property it doesn't
+        // recognise, so leaking any one of these bricks the server on next boot.
         profile.Settings["ipAddress"] = "0.0.0.0";
+        profile.Settings["description"] = "A test server";
         profile.Settings["tags"] = "pvp,modded";
+        profile.Settings["serverPath"] = @"C:\Servers\7dtd";
+        profile.Settings["saveDirectory"] = @"C:\Servers\7dtd\Saves";
+        profile.Settings["backupDirectory"] = @"C:\Servers\7dtd\Backups";
+        profile.Settings["cpuLimitPercent"] = "100";
+        profile.Settings["autoRestart"] = "true";
+        profile.Settings["rconPassword"] = "secret";
         profile.Settings["imported"] = "true";
 
         var svc = new SevenDaysToDieConfigService();
@@ -1318,9 +1326,15 @@ static async Task Test7DaysToDieConfigXmlAsync()
         Assert(savedDoc.GetValue("GameWorld") == "RWG", "GameWorld must be saved from Settings.");
         Assert(savedDoc.GetValue("SandboxCode") == "AAAJABJACJADJARFBNC", "SandboxCode must be saved.");
         Assert(savedDoc.GetValue("ServerPassword") == "join-secret", "ServerPassword must be saved from profile.Password.");
-        Assert(savedDoc.GetValue("ipAddress") == null, "App-internal ipAddress must never be written to serverconfig.xml.");
-        Assert(savedDoc.GetValue("tags") == null, "App-internal tags must never be written to serverconfig.xml.");
-        Assert(savedDoc.GetValue("imported") == null, "App-internal imported marker must never be written to serverconfig.xml.");
+        string[] appInternalKeys =
+        [
+            "ipAddress", "description", "tags", "serverPath", "saveDirectory",
+            "backupDirectory", "cpuLimitPercent", "autoRestart", "rconPassword", "imported"
+        ];
+        foreach (var key in appInternalKeys)
+        {
+            Assert(savedDoc.GetValue(key) == null, $"App-internal '{key}' must never be written to serverconfig.xml.");
+        }
 
         // A config poisoned by an older app version must be cleaned up on next save.
         var poisonedPath = Path.Combine(tempRoot, "poisoned-serverconfig.xml");

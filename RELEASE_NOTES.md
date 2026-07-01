@@ -1,5 +1,12 @@
 # Release Notes
 
+## v4.0.12
+
+### Fixed
+- **7 Days to Die still failed to start after v4.0.10** — that fix only excluded the `ipAddress` property that had been leaking into `serverconfig.xml`; the Add/Edit Server wizard actually stores nine of its own internal fields (description, tags, save/backup paths, CPU limit, auto-restart, RCON password, and more) into the same settings dictionary 7DtD's config writer reads from. Any one of them reaching the XML file aborts the game's startup. All of them are now excluded from `serverconfig.xml` and actively stripped from a config an older version already wrote them into — this closes the whole bug class instead of one property at a time. Confirmed ARK and Palworld are unaffected; they use their own isolated settings, not this shared dictionary.
+
+---
+
 ## v4.0.11
 
 ### Fixed

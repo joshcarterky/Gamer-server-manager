@@ -251,8 +251,20 @@ public sealed class SevenDaysToDieConfigService
         "UserDataFolder",  // controlled via -UserDataFolder launch flag
         "SteamBranch",
         "CustomSteamBranch",
-        "ipAddress",           // app-side query/display host, not a game config option
+        // The Add/Edit Server wizard (AddServerWizardViewModel.CreateProfile) stores
+        // its own form fields into profile.Settings under these keys, for every
+        // game type. None of them are real 7 Days to Die config properties (the
+        // real ones are ServerDescription, TelnetPassword, etc.) — keep this list
+        // in sync with that dictionary.
+        "ipAddress",           // app-side query/display host
+        "description",         // app-side notes field (real key is ServerDescription)
         "tags",                // app-side server tags
+        "serverPath",          // app-side wizard field
+        "saveDirectory",       // app-side wizard field
+        "backupDirectory",     // app-side wizard field
+        "cpuLimitPercent",     // app-side wizard field
+        "autoRestart",         // app-side wizard field
+        "rconPassword",        // app-side RCON UI field (real key is TelnetPassword)
         "imported",            // app-side import marker
         "originalImportPath",  // app-side import marker
         "importMode"           // app-side import marker
