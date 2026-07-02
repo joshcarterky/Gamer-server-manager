@@ -1,5 +1,17 @@
 # Release Notes
 
+## v4.1.1
+
+### Fixed
+- **Save Settings button stayed greyed out after the first save** — the button's enabled-state was last refreshed while the page was still busy saving, and nothing refreshed it again afterwards. All busy-gated buttons (Save, Discard, Reload, Migrate, Undo Migration) now re-enable the moment the operation finishes.
+- **`HideCommandExecutionLog` was offered as an on/off toggle** — the real property is a 0–3 mode (verified against the game's shipped `serverconfig.xml`): show everything / hide from Telnet & control panel / also hide from remote clients / hide everything. It's now a proper dropdown, and a legacy `True`/`False` stored by an older app version self-heals to `3`/`0` on load and on save.
+
+### Added
+- **30 shipped V3 properties promoted from "Unrecognized" to first-class typed settings**, verified against the game's own default `serverconfig.xml`: admin slots (`ServerAdminSlots`/`ServerAdminSlotsPermission`), `TerminalWindowEnabled`, and four new categories — **Gameplay** (safe zone level/hours, cheat mode, bedroll dead zone & expiry, spawn-near-friend, camera restriction, PvP mode, party kill range), **Land Claims** (count, size, dead zone, expiry, decay mode, online/offline durability modifiers, offline delay), **Performance** (max spawned zombies/animals, max client view distance, mesh queue, Dynamic Mesh group), and **Twitch Integration** (permission level, blood-moon actions). All with proper control types, defaults, ranges, and help text.
+- **Regression test pinning the schema to the shipped config** — the full property list from a real V3.0 install is asserted to produce zero "Unrecognized" entries, so a future game update that adds properties will show up as a test-visible schema gap.
+
+---
+
 ## v4.1.0
 
 ### Added — 7 Days to Die V3.0 management upgrade

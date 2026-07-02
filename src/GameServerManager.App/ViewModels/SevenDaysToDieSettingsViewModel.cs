@@ -244,10 +244,13 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel, IDisposable
         ConfigFilePath = Path.Combine(InstallPath, "serverconfig.xml");
         ConfigFileExists = File.Exists(ConfigFilePath);
 
-        // Build items from provider definitions
+        // Build items from provider definitions. Values pass through
+        // NormalizeSettingValue so shapes an older app version stored wrong
+        // (e.g. HideCommandExecutionLog as True/False) heal on load.
         var allItems = provider.SettingsDefinitions
             .Select(def => new DtdSettingItemViewModel(def,
-                profile.Settings.TryGetValue(def.SettingKey, out var v) ? v : def.DefaultValue ?? string.Empty))
+                SevenDaysToDieConfigService.NormalizeSettingValue(def.SettingKey,
+                    profile.Settings.TryGetValue(def.SettingKey, out var v) ? v : def.DefaultValue ?? string.Empty)))
             .ToList();
 
         AllItems = new ObservableCollection<DtdSettingItemViewModel>(allItems);
@@ -384,7 +387,19 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel, IDisposable
     public bool IsBusy
     {
         get => _isBusy;
-        private set { _isBusy = value; OnPropertyChanged(); }
+        private set
+        {
+            _isBusy = value;
+            OnPropertyChanged();
+            // Every busy-gated command must re-query, or the Save button stays
+            // greyed out after the first save (the last notification fired while
+            // the ViewModel was still busy).
+            SaveCommand?.NotifyCanExecuteChanged();
+            DiscardCommand?.NotifyCanExecuteChanged();
+            ReloadFromFileCommand?.NotifyCanExecuteChanged();
+            RunMigrationCommand?.NotifyCanExecuteChanged();
+            RollbackMigrationCommand?.NotifyCanExecuteChanged();
+        }
     }
 
     public DateTime? LastSavedAt

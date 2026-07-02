@@ -113,6 +113,7 @@ Test7DaysToDieSandboxCodecContract();
 Test7DaysToDieGsoParser();
 await Test7DaysToDieSandboxPresetsAsync();
 await Test7DaysToDieMigrationAsync();
+await Test7DaysToDieShippedConfigCoverageAsync();
 TestGameArtworkMapping();
 TestConfigFileSnapshotDrift();
 await TestBackupRestoreSafetyAsync();
@@ -2298,6 +2299,98 @@ static async Task Test7DaysToDieMigrationAsync()
         Assert(threw, "Applying an empty plan must throw, not fake success.");
 
         Console.WriteLine("[PASS] 7DtD V2->V3 migration");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
+}
+
+static async Task Test7DaysToDieShippedConfigCoverageAsync()
+{
+    // Property list taken verbatim from the game's own shipped V3
+    // serverconfig.xml (captured from a real install, 2026-07). Every property
+    // the game ships must be a first-class typed setting — none may fall into
+    // the "Unrecognized" bucket.
+    string[] shippedProperties =
+    [
+        "ServerName", "ServerDescription", "ServerWebsiteURL", "ServerPassword",
+        "ServerLoginConfirmationText", "Region", "Language",
+        "ServerPort", "ServerVisibility", "ServerDisabledNetworkProtocols",
+        "ServerMaxWorldTransferSpeedKiBs",
+        "ServerMaxPlayerCount", "ServerReservedSlots", "ServerReservedSlotsPermission",
+        "ServerAdminSlots", "ServerAdminSlotsPermission",
+        "WebDashboardEnabled", "WebDashboardPort", "WebDashboardUrl", "EnableMapRendering",
+        "TelnetEnabled", "TelnetPort", "TelnetPassword", "TelnetFailedLoginLimit",
+        "TelnetFailedLoginsBlocktime", "TerminalWindowEnabled",
+        "AdminFileName",
+        "ServerAllowCrossplay", "EACEnabled", "IgnoreEOSSanctions", "HideCommandExecutionLog",
+        "MaxUncoveredMapChunksPerPlayer", "PersistentPlayerProfiles", "MaxChunkAge", "SaveDataLimit",
+        "GameWorld", "WorldGenSeed", "WorldGenSize", "GameName", "GameMode",
+        "PlayerSafeZoneLevel", "PlayerSafeZoneHours",
+        "BuildCreate", "BedrollDeadZoneSize", "BedrollExpiryTime", "AllowSpawnNearFriend",
+        "CameraRestrictionMode",
+        "MaxSpawnedZombies", "MaxSpawnedAnimals", "ServerMaxAllowedViewDistance", "MaxQueuedMeshLayers",
+        "PartySharedKillRange", "PlayerKillingMode",
+        "LandClaimCount", "LandClaimSize", "LandClaimDeadZone", "LandClaimExpiryTime",
+        "LandClaimDecayMode", "LandClaimOnlineDurabilityModifier", "LandClaimOfflineDurabilityModifier",
+        "LandClaimOfflineDelay",
+        "DynamicMeshEnabled", "DynamicMeshLandClaimOnly", "DynamicMeshLandClaimBuffer",
+        "DynamicMeshMaxItemCache",
+        "TwitchServerPermission", "TwitchBloodMoonAllowed",
+        "SandboxCode"
+    ];
+
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var configPath = Path.Combine(tempRoot, "serverconfig.xml");
+        var doc = ServerConfigXmlDocument.CreateDefault();
+        foreach (var name in shippedProperties)
+            doc.SetValue(name, "x");
+        await doc.SaveAtomicAsync(configPath, createBackup: false);
+
+        GameProviderRegistry.CreateDefault().TryGetProvider("seven_days_to_die", out var provider);
+        var report = await new SevenDaysToDieConfigDriftService()
+            .AnalyzeAsync(configPath, provider!.SettingsDefinitions.Select(d => d.SettingKey));
+
+        Assert(report.UnknownProperties.Count == 0,
+            "Every property in the shipped V3 serverconfig.xml must be a typed setting. Unrecognized: " +
+            string.Join(", ", report.UnknownProperties.Select(p => p.Name)));
+        Assert(report.LegacyProperties.Count == 0 && report.RetiredProperties.Count == 0,
+            "The shipped config contains no legacy or retired properties.");
+        Assert(report.Generation == SevenDaysGeneration.V3, "Shipped config (with SandboxCode) is V3.");
+
+        // HideCommandExecutionLog is a 0-3 mode, not a toggle (verified against
+        // the shipped config), and legacy True/False values must self-heal.
+        var hide = provider.SettingsDefinitions.First(s => s.SettingKey == "HideCommandExecutionLog");
+        Assert(hide.ControlType == SettingControlType.Dropdown && hide.Options!.Count == 4,
+            "HideCommandExecutionLog must be a 4-option dropdown (0-3).");
+        Assert(hide.DefaultValue == "0", "HideCommandExecutionLog default must be 0.");
+        Assert(SevenDaysToDieConfigService.NormalizeSettingValue("HideCommandExecutionLog", "False") == "0",
+            "Legacy False must normalize to 0.");
+        Assert(SevenDaysToDieConfigService.NormalizeSettingValue("HideCommandExecutionLog", "True") == "3",
+            "Legacy True must normalize to 3.");
+        Assert(SevenDaysToDieConfigService.NormalizeSettingValue("HideCommandExecutionLog", "2") == "2",
+            "Valid mode values must pass through untouched.");
+        Assert(SevenDaysToDieConfigService.NormalizeSettingValue("EACEnabled", "True") == "True",
+            "Other keys must never be rewritten.");
+
+        // The normalization must also apply on the file-write path.
+        var profile = new ServerProfile
+        {
+            Id = "7dtd-normalize", GameId = "seven_days_to_die", ServerName = "Normalize",
+            Ports = new List<ServerPort> { new() { Name = "Game", Port = 26900 } }
+        };
+        profile.Settings["HideCommandExecutionLog"] = "True"; // stored by an older app version
+        var normPath = Path.Combine(tempRoot, "normalized.xml");
+        await SevenDaysToDieConfigService.EnsureConfigExistsAsync(normPath);
+        await new SevenDaysToDieConfigService().SaveAsync(profile, normPath, createBackup: false);
+        var normDoc = await ServerConfigXmlDocument.LoadAsync(normPath);
+        Assert(normDoc.GetValue("HideCommandExecutionLog") == "3",
+            "A legacy True stored in the profile must be written to disk as mode 3.");
+
+        Console.WriteLine("[PASS] 7DtD shipped-config coverage");
     }
     finally
     {

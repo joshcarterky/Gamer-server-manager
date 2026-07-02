@@ -338,7 +338,7 @@ public sealed class SevenDaysToDieConfigService
                 continue;
             }
 
-            doc.SetValue(key, value);
+            doc.SetValue(key, NormalizeSettingValue(key, value));
         }
 
         // Port: prefer the Ports list entry over the Settings dict.
@@ -439,6 +439,22 @@ public sealed class SevenDaysToDieConfigService
 
     /// <summary>True for V2 gameplay keys superseded by SandboxCode in V3.</summary>
     public static bool IsLegacyV2Key(string key) => LegacyV2GameplayKeys.Contains(key);
+
+    /// <summary>
+    /// Repairs values an older app version stored in the wrong shape.
+    /// HideCommandExecutionLog is a 0–3 mode (verified against the shipped V3
+    /// serverconfig.xml) but used to be offered as a True/False toggle.
+    /// </summary>
+    public static string NormalizeSettingValue(string key, string value)
+    {
+        if (key.Equals("HideCommandExecutionLog", StringComparison.OrdinalIgnoreCase))
+        {
+            if (value.Equals("False", StringComparison.OrdinalIgnoreCase)) return "0";
+            if (value.Equals("True", StringComparison.OrdinalIgnoreCase)) return "3";
+        }
+
+        return value;
+    }
 }
 
 // ─── Launch command builder ───────────────────────────────────────────────────

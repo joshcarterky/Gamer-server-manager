@@ -145,6 +145,16 @@ public class SevenDaysToDieProvider : GameServerProviderBase
             helpText: "Permission levels: 0 = owner, 1–100 = moderator/admin range, 1000 = regular player. Default 100 means moderators can use reserved slots.",
             recommendedValue: "100 (moderators and above)"),
 
+        Number("ServerAdminSlots",
+            "Admin Slots", "0", min: 0, max: 64, unit: "slots", category: "Player Slots",
+            description: "This many admins can still join even when the server has reached Max Players.",
+            helpText: "Unlike reserved slots, admin slots are on top of Max Players — they let staff join a full server."),
+
+        Number("ServerAdminSlotsPermission",
+            "Admin Slot Permission Level", "0", min: 0, max: 1000, unit: "level", category: "Player Slots",
+            description: "Required permission level to use the admin slots.",
+            helpText: "Default 0 restricts admin slots to the server owner. Raise it to include moderators."),
+
         Toggle("PersistentPlayerProfiles",
             "Persistent Player Profiles", "False", category: "Player Slots",
             description: "When enabled, player profiles are kept after character death instead of being reset.",
@@ -168,10 +178,17 @@ public class SevenDaysToDieProvider : GameServerProviderBase
             helpText: "EOS sanctions are applied to accounts banned through Epic's systems. Ignoring them is only appropriate for private servers where you trust all players.",
             recommendedValue: "Disabled (default)"),
 
-        Toggle("HideCommandExecutionLog",
-            "Hide Command Log", "False", category: "Security",
-            description: "Suppresses admin command names from the server log.",
-            helpText: "When enabled, admin commands still execute but their names do not appear in the log file. Useful to keep admin activity private on shared hosting."),
+        // Verified against the shipped V3 serverconfig.xml: this is a 0–3 mode,
+        // not a boolean. Writing True/False here would hand the game an invalid value.
+        Dropdown("HideCommandExecutionLog", "Hide Command Log", "0",
+            [
+                "0:Show everything",
+                "1:Hide from Telnet / control panel",
+                "2:Also hide from remote game clients",
+                "3:Hide everything"
+            ], category: "Security",
+            description: "Controls where executed command names are hidden from logging.",
+            helpText: "Admin commands still execute at every level — this only controls whether their names appear in the log output. Useful to keep admin activity private on shared hosting."),
 
         Text("AdminFileName",
             "Admin File Name", "serveradmin.xml", category: "Security",
@@ -228,6 +245,11 @@ public class SevenDaysToDieProvider : GameServerProviderBase
             description: "How long (in seconds) a Telnet IP is blocked after exceeding the failed-login limit.",
             helpText: "Increase this value on public servers to slow brute-force attempts. A value of 60–300 seconds is recommended for internet-facing servers.",
             recommendedValue: "60–300 for public servers"),
+
+        Toggle("TerminalWindowEnabled",
+            "Terminal Window", "True", category: "Remote Administration",
+            description: "Shows a terminal window for log output and command input (Windows only).",
+            helpText: "The terminal window is the server's local console. Disable it when running the server as a background service."),
 
         // ── Data and Storage ──────────────────────────────────────────────────────
         Folder("UserDataFolder",
@@ -293,6 +315,149 @@ public class SevenDaysToDieProvider : GameServerProviderBase
             ], category: "World",
             description: "Survival mode enables all mechanics (hunger, thirst, zombie threat). Creative mode removes most survival restrictions.",
             helpText: "Creative mode is intended for building and testing. Most community servers run Survival."),
+
+        // ── Gameplay (server-level rules that stayed outside SandboxCode in V3) ──
+        Number("PlayerSafeZoneLevel",
+            "Safe Zone Max Level", "5", min: 0, max: 300, unit: "level", category: "Gameplay",
+            description: "Players at or below this level spawn inside a safe zone with no enemies.",
+            helpText: "Protects brand-new players from being killed immediately after spawning."),
+
+        Number("PlayerSafeZoneHours",
+            "Safe Zone Duration", "5", min: 0, max: 100, unit: "world hours", category: "Gameplay",
+            description: "How many in-game hours the new-player safe zone lasts."),
+
+        Toggle("BuildCreate",
+            "Cheat Mode (Build/Create)", "False", category: "Gameplay",
+            description: "Enables cheat mode: free building and item creation for all players.",
+            helpText: "Intended for creative/building servers. Leave off for survival play.",
+            recommendedValue: "Disabled for survival servers"),
+
+        Number("BedrollDeadZoneSize",
+            "Bedroll Dead Zone Size", "15", min: 0, max: 200, unit: "blocks", category: "Gameplay",
+            description: "Radius around a bedroll where zombies will not spawn and cleared sleeper volumes stay clear."),
+
+        Number("BedrollExpiryTime",
+            "Bedroll Expiry", "45", min: 0, max: 365, unit: "days", category: "Gameplay",
+            description: "Real-world days a bedroll stays active after its owner was last online."),
+
+        Dropdown("AllowSpawnNearFriend", "Spawn Near Friend", "2",
+            [
+                "0:Disabled",
+                "1:Always allowed",
+                "2:Only near friends in the forest biome"
+            ], category: "Gameplay",
+            description: "Whether players joining for the first time can spawn near a friend who is online."),
+
+        Dropdown("CameraRestrictionMode", "Camera Restriction", "0",
+            [
+                "0:Free (first and third person)",
+                "1:First person only",
+                "2:Third person only"
+            ], category: "Gameplay",
+            description: "Restricts which camera modes players may use."),
+
+        Dropdown("PlayerKillingMode", "PvP Mode", "3",
+            [
+                "0:No killing",
+                "1:Kill allies only",
+                "2:Kill strangers only",
+                "3:Kill everyone"
+            ], category: "Gameplay",
+            description: "Who players are allowed to kill.",
+            helpText: "0 makes the server fully PvE. 3 is open PvP. 1 and 2 gate killing by ally status."),
+
+        Number("PartySharedKillRange",
+            "Party Shared Kill Range", "100", min: 0, max: 10000, unit: "meters", category: "Gameplay",
+            description: "Distance within which party members receive shared kill XP and quest kill credit."),
+
+        // ── Land Claims ───────────────────────────────────────────────────────────
+        Number("LandClaimCount",
+            "Claims Per Player", "5", min: 0, max: 100, unit: "claims", category: "Land Claims",
+            description: "Maximum allowed land claims per player."),
+
+        Number("LandClaimSize",
+            "Claim Size", "41", min: 1, max: 100, unit: "blocks", category: "Land Claims",
+            description: "Size in blocks protected by a keystone."),
+
+        Number("LandClaimDeadZone",
+            "Claim Dead Zone", "30", min: 0, max: 200, unit: "blocks", category: "Land Claims",
+            description: "Minimum distance between keystones of players who are not friends."),
+
+        Number("LandClaimExpiryTime",
+            "Claim Expiry", "7", min: 0, max: 365, unit: "days", category: "Land Claims",
+            description: "Real-world days a player can be offline before their claims expire and lose protection."),
+
+        Dropdown("LandClaimDecayMode", "Claim Decay Mode", "0",
+            [
+                "0:Slow (linear)",
+                "1:Fast (exponential)",
+                "2:None (full protection until expiry)"
+            ], category: "Land Claims",
+            description: "How claim protection decays while the owner is offline."),
+
+        Number("LandClaimOnlineDurabilityModifier",
+            "Online Durability Modifier", "4", min: 0, max: 256, unit: "×", category: "Land Claims",
+            description: "Block hardness multiplier inside a claim while the owner is online. 0 = infinite (no damage possible).",
+            recommendedValue: "4 (default)"),
+
+        Number("LandClaimOfflineDurabilityModifier",
+            "Offline Durability Modifier", "4", min: 0, max: 256, unit: "×", category: "Land Claims",
+            description: "Block hardness multiplier inside a claim while the owner is offline. 0 = infinite (no damage possible).",
+            recommendedValue: "4 (default)"),
+
+        Number("LandClaimOfflineDelay",
+            "Offline Delay", "0", min: 0, max: 1440, unit: "minutes", category: "Land Claims",
+            description: "Minutes after logout before claim hardness transitions from the online to the offline modifier."),
+
+        // ── Performance ───────────────────────────────────────────────────────────
+        Number("MaxSpawnedZombies",
+            "Max Spawned Zombies", "64", min: 1, max: 256, unit: "zombies", category: "Performance",
+            description: "World-wide zombie cap, scaled per use case (×1.9 blood moons, ×2.1 sleepers).",
+            helpText: "Changing this has a huge impact on performance. Raise only on strong hardware.",
+            recommendedValue: "64 (default)"),
+
+        Number("MaxSpawnedAnimals",
+            "Max Spawned Animals", "50", min: 1, max: 256, unit: "animals", category: "Performance",
+            description: "World-wide wildlife cap. Animals cost less CPU than zombies.",
+            helpText: "Only worth raising on servers with many players spread across the map — biome spawning is per-area."),
+
+        Number("ServerMaxAllowedViewDistance",
+            "Max Client View Distance", "12", min: 6, max: 12, unit: "chunks", category: "Performance",
+            description: "Maximum view distance a client may request (6–12). High impact on memory and performance.",
+            recommendedValue: "12; lower to 8 on memory-constrained servers"),
+
+        Number("MaxQueuedMeshLayers",
+            "Max Queued Mesh Layers", "1000", min: 100, max: 10000, unit: "layers", category: "Performance",
+            description: "Maximum chunk mesh layers queued during mesh generation. Lower uses less memory but slows chunk generation.",
+            advanced: true),
+
+        Toggle("DynamicMeshEnabled",
+            "Dynamic Mesh", "True", category: "Performance",
+            description: "Enables the Dynamic Mesh system (distant rendering of player-built structures)."),
+
+        Toggle("DynamicMeshLandClaimOnly",
+            "Dynamic Mesh in Claims Only", "True", category: "Performance",
+            description: "Restricts Dynamic Mesh to player land-claim areas."),
+
+        Number("DynamicMeshLandClaimBuffer",
+            "Dynamic Mesh Claim Buffer", "3", min: 0, max: 32, unit: "chunks", category: "Performance",
+            description: "Chunk radius around land claims covered by Dynamic Mesh.",
+            advanced: true),
+
+        Number("DynamicMeshMaxItemCache",
+            "Dynamic Mesh Item Cache", "3", min: 1, max: 100, unit: "items", category: "Performance",
+            description: "How many Dynamic Mesh items are processed concurrently. Higher values use more RAM.",
+            advanced: true),
+
+        // ── Twitch Integration ────────────────────────────────────────────────────
+        Number("TwitchServerPermission",
+            "Twitch Permission Level", "90", min: 0, max: 1000, unit: "level", category: "Twitch Integration",
+            description: "Required permission level to use Twitch integration on the server."),
+
+        Toggle("TwitchBloodMoonAllowed",
+            "Twitch Actions During Blood Moon", "False", category: "Twitch Integration",
+            description: "Allows Twitch actions during a blood moon. Extra spawned zombies can cause server lag.",
+            recommendedValue: "Disabled (default)"),
 
         // ── V3.0 Sandbox ──────────────────────────────────────────────────────────
         Text("SandboxCode",
