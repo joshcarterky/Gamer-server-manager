@@ -246,7 +246,7 @@ public sealed class SevenDaysToDieConfigService
     // Also includes app-internal metadata that lives in profile.Settings but has
     // no meaning to the game itself — 7 Days to Die aborts startup on any
     // unrecognised <property>, so leaking one of these bricks the server.
-    private static readonly HashSet<string> _launchOnlyKeys = new(StringComparer.OrdinalIgnoreCase)
+    internal static readonly HashSet<string> LaunchOnlyKeys = new(StringComparer.OrdinalIgnoreCase)
     {
         "UserDataFolder",  // controlled via -UserDataFolder launch flag
         "SteamBranch",
@@ -321,7 +321,7 @@ public sealed class SevenDaysToDieConfigService
         // Remaining settings from the Settings dictionary.
         foreach (var (key, value) in profile.Settings)
         {
-            if (_launchOnlyKeys.Contains(key))
+            if (LaunchOnlyKeys.Contains(key))
             {
                 // Also strip it if an older version of the app already wrote it to
                 // disk — an unrecognised <property> aborts 7DtD's startup entirely.
@@ -429,6 +429,16 @@ public sealed class SevenDaysToDieConfigService
     private static bool IsV3Config(ServerProfile profile)
         => profile.Settings.ContainsKey("SandboxCode") &&
            !string.IsNullOrWhiteSpace(profile.Settings["SandboxCode"]);
+
+    /// <summary>
+    /// True for keys that live in profile.Settings but must never be written to
+    /// (or offered as) serverconfig.xml properties: launch flags, wizard-internal
+    /// metadata, and retired properties the current game rejects.
+    /// </summary>
+    public static bool IsAppInternalKey(string key) => LaunchOnlyKeys.Contains(key);
+
+    /// <summary>True for V2 gameplay keys superseded by SandboxCode in V3.</summary>
+    public static bool IsLegacyV2Key(string key) => LegacyV2GameplayKeys.Contains(key);
 }
 
 // ─── Launch command builder ───────────────────────────────────────────────────

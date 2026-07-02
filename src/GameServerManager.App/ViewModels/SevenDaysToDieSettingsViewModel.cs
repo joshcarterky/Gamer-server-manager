@@ -109,6 +109,10 @@ public sealed class DtdSettingItemViewModel : BaseViewModel
     public bool IsNumber { get; }
     public bool IsFolderPicker { get; }
     public bool IsSandboxCode { get; }
+
+    /// <summary>Property found in serverconfig.xml but not in the current schema —
+    /// preserved as-is and edited through a generic text control.</summary>
+    public bool IsUnrecognized { get; init; }
     public IReadOnlyList<OptionItem> ParsedOptions { get; }
     public int? MinValue { get; }
     public int? MaxValue { get; }
@@ -186,6 +190,10 @@ public sealed class DtdSettingItemViewModel : BaseViewModel
 
 public sealed record CrossplayCheck(string Name, bool Passed, string? FixHint);
 
+// ─── Sandbox decoded-option row ───────────────────────────────────────────────
+
+public sealed record SandboxOptionRow(string Key, string Display, string Category, string Value);
+
 // ─── Main ViewModel ───────────────────────────────────────────────────────────
 
 public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel, IDisposable
@@ -193,8 +201,14 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel, IDisposable
     private readonly ServerProfile _profile;
     private readonly SevenDaysToDieConfigService _configService = new();
     private readonly SevenDaysToDieValidator _validator = new();
-    private readonly ServersJsonService _serversJsonService = new(new AppDataPaths());
+    private readonly ServersJsonService _serversJsonService;
     private readonly IGameServerProvider _provider;
+
+    private readonly SevenDaysToDieVersionService _versionService = new();
+    private readonly SevenDaysToDieConfigDriftService _driftService = new();
+    private readonly SevenDaysToDieMigrationService _migrationService = new();
+    private readonly SandboxCodecRegistry _codecRegistry = SandboxCodecRegistry.CreateDefault();
+    private readonly SandboxPresetStore _presetStore;
 
     private string _selectedCategory = string.Empty;
     private string _searchText = string.Empty;
@@ -207,10 +221,23 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel, IDisposable
     private ConfigFileWatcher? _configWatcher;
     private bool _hasExternalChanges;
 
+    // Content hash of serverconfig.xml as of the last load/save by this app.
+    // Save refuses to overwrite when the on-disk file no longer matches.
+    private string _lastSyncedHash = string.Empty;
+
+    private SevenDaysToDieInstallInfo? _installInfo;
+    private MigrationResult? _lastMigrationResult;
+    private SandboxSettings? _lastGsoImport;
+    private SandboxSettings? _gsoBaseline;
+
     public SevenDaysToDieSettingsViewModel(ServerProfile profile, IGameServerProvider provider)
     {
         _profile = profile;
         _provider = provider;
+
+        var paths = new AppDataPaths();
+        _serversJsonService = new ServersJsonService(paths);
+        _presetStore = new SandboxPresetStore(paths.SettingsDirectory);
 
         ServerName = profile.ServerName;
         InstallPath = profile.InstallPath;
@@ -255,7 +282,35 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel, IDisposable
         });
         ApplyCrossplaySettingsCommand = new RelayCommand(_ => ApplyCrossplaySettings());
         CopyConfigPathCommand = new RelayCommand(_ => Clipboard.SetText(ConfigFilePath));
-        DismissExternalChangesCommand = new RelayCommand(_ => HasExternalChanges = false);
+        DismissExternalChangesCommand = new RelayCommand(_ =>
+        {
+            // Explicit "Keep My Changes": re-baseline so the next save is allowed
+            // to overwrite the external edit the user just chose to discard.
+            _lastSyncedHash = ConfigFileSnapshot.Compute(ConfigFilePath);
+            HasExternalChanges = false;
+        });
+
+        CopySandboxCodeCommand = new RelayCommand(_ =>
+        {
+            SandboxCodeItem?.CopySandboxCode();
+            SetStatus("Sandbox code copied to clipboard.", error: false);
+        }, () => HasSandboxCode);
+        PasteSandboxCodeCommand = new RelayCommand(_ =>
+        {
+            SandboxCodeItem?.PasteSandboxCode();
+            SetStatus("Sandbox code pasted — review and save.", error: false);
+        });
+        ImportGsoCommand = new RelayCommand(_ => ImportGso(), () => !string.IsNullOrWhiteSpace(GsoImportText));
+        SetGsoBaselineCommand = new RelayCommand(_ => SetGsoBaseline(), () => _lastGsoImport != null);
+        ApplyPresetCommand = new RelayCommand(p => ApplyPreset(p as SandboxPreset ?? SelectedPreset));
+        DeletePresetCommand = new RelayCommand(p => _ = DeletePresetAsync(p as SandboxPreset));
+        SaveCurrentAsPresetCommand = new RelayCommand(_ => _ = SaveCurrentAsPresetAsync(),
+            () => HasSandboxCode && !string.IsNullOrWhiteSpace(NewPresetName));
+        RunMigrationCommand = new RelayCommand(_ => _ = RunMigrationAsync(), () => !_isBusy && MigrationPlan.Count > 0);
+        RollbackMigrationCommand = new RelayCommand(_ => _ = RollbackMigrationAsync(),
+            () => !_isBusy && _lastMigrationResult != null);
+
+        _lastSyncedHash = ConfigFileSnapshot.Compute(ConfigFilePath);
 
         RunValidation();
 
@@ -263,6 +318,10 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel, IDisposable
         _configWatcher = new ConfigFileWatcher(ConfigFilePath);
         _configWatcher.DriftDetected += OnConfigDrift;
         _configWatcher.Start();
+
+        // Installed-files-first insights: version/branch detection, unrecognized
+        // property surfacing, migration plan, presets. Async — UI fills in as it lands.
+        _ = InitializeInsightsAsync();
     }
 
     // ── Read-only server metadata ─────────────────────────────────────────────
@@ -406,6 +465,64 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel, IDisposable
     public RelayCommand ApplyCrossplaySettingsCommand { get; }
     public RelayCommand CopyConfigPathCommand { get; }
     public RelayCommand DismissExternalChangesCommand { get; }
+    public RelayCommand CopySandboxCodeCommand { get; }
+    public RelayCommand PasteSandboxCodeCommand { get; }
+    public RelayCommand ImportGsoCommand { get; }
+    public RelayCommand SetGsoBaselineCommand { get; }
+    public RelayCommand ApplyPresetCommand { get; }
+    public RelayCommand DeletePresetCommand { get; }
+    public RelayCommand SaveCurrentAsPresetCommand { get; }
+    public RelayCommand RunMigrationCommand { get; }
+    public RelayCommand RollbackMigrationCommand { get; }
+
+    // ── Installed version info ────────────────────────────────────────────────
+
+    public string VersionSummary => _installInfo?.Summary ?? string.Empty;
+    public bool HasVersionInfo => _installInfo != null &&
+        (_installInfo.GameVersion != null || _installInfo.BuildId != null);
+
+    // ── V2 → V3 migration assistant ───────────────────────────────────────────
+
+    public ObservableCollection<MigrationPlanEntry> MigrationPlan { get; } = new();
+    public bool ShowMigrationPanel => MigrationPlan.Count > 0;
+    public bool CanRollbackMigration => _lastMigrationResult != null;
+
+    // ── Sandbox: decoded view, gso import, presets ────────────────────────────
+
+    public ObservableCollection<SandboxOptionRow> DecodedOptions { get; } = new();
+    public ObservableCollection<SandboxDiff> GsoDiffs { get; } = new();
+    public ObservableCollection<SandboxPreset> Presets { get; } = new();
+
+    public bool HasDecodedOptions => DecodedOptions.Count > 0;
+    public bool HasGsoDiffs => GsoDiffs.Count > 0;
+
+    private string _sandboxDecodeStatus = string.Empty;
+    public string SandboxDecodeStatus
+    {
+        get => _sandboxDecodeStatus;
+        private set { _sandboxDecodeStatus = value; OnPropertyChanged(); }
+    }
+
+    private string _gsoImportText = string.Empty;
+    public string GsoImportText
+    {
+        get => _gsoImportText;
+        set { _gsoImportText = value; OnPropertyChanged(); ImportGsoCommand.NotifyCanExecuteChanged(); }
+    }
+
+    private string _newPresetName = string.Empty;
+    public string NewPresetName
+    {
+        get => _newPresetName;
+        set { _newPresetName = value; OnPropertyChanged(); SaveCurrentAsPresetCommand.NotifyCanExecuteChanged(); }
+    }
+
+    private SandboxPreset? _selectedPreset;
+    public SandboxPreset? SelectedPreset
+    {
+        get => _selectedPreset;
+        set { _selectedPreset = value; OnPropertyChanged(); }
+    }
 
     // ── Config drift (file changed outside the app) ───────────────────────────
 
@@ -442,6 +559,283 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel, IDisposable
         }
     }
 
+    // ── Insights: installed version, unrecognized keys, migration, presets ────
+
+    private async Task InitializeInsightsAsync()
+    {
+        try
+        {
+            _installInfo = await _versionService.DetectAsync(InstallPath);
+            OnPropertyChanged(nameof(VersionSummary));
+            OnPropertyChanged(nameof(HasVersionInfo));
+
+            await RefreshDriftAndMigrationAsync();
+            await RefreshPresetsAsync();
+            UpdateSandboxDecodeState();
+        }
+        catch (Exception ex)
+        {
+            // Insights are additive — never block the settings page on them.
+            SetStatus($"Server inspection incomplete: {ex.Message}", error: false);
+        }
+    }
+
+    private async Task RefreshDriftAndMigrationAsync()
+    {
+        var report = await _driftService.AnalyzeAsync(
+            ConfigFilePath, _provider.SettingsDefinitions.Select(d => d.SettingKey));
+
+        // Surface properties present in the file but unknown to the schema as
+        // editable "Unrecognized" items instead of hiding them.
+        var known = new HashSet<string>(AllItems.Select(i => i.Key), StringComparer.OrdinalIgnoreCase);
+        foreach (var prop in report.UnknownProperties.Where(p => !known.Contains(p.Name)))
+        {
+            var def = new ServerSettingDefinition
+            {
+                SettingKey = prop.Name,
+                DisplayName = prop.Name,
+                DefaultValue = prop.Value,
+                ControlType = SettingControlType.TextBox,
+                Category = "Unrecognized",
+                Description = "Not recognized by the current schema — possibly added by a newer " +
+                              "game version or a mod. Preserved in serverconfig.xml exactly as-is.",
+                RequiresRestart = true
+            };
+            var item = new DtdSettingItemViewModel(def, prop.Value) { IsUnrecognized = true };
+            item.ValueChanged += OnAnyValueChanged;
+            AllItems.Add(item);
+            _profile.Settings.TryAdd(prop.Name, prop.Value);
+        }
+
+        if (AllItems.Any(i => i.IsUnrecognized) &&
+            Categories.All(c => c.Name != "Unrecognized"))
+        {
+            Categories.Add(new DtdCategoryViewModel { Name = "Unrecognized" });
+        }
+
+        // Legacy V2 gameplay properties → migration plan.
+        var plan = await _migrationService.BuildPlanAsync(ConfigFilePath);
+        MigrationPlan.Clear();
+        foreach (var entry in plan)
+            MigrationPlan.Add(entry);
+
+        OnPropertyChanged(nameof(ShowMigrationPanel));
+        RunMigrationCommand.NotifyCanExecuteChanged();
+        ApplyFilter();
+    }
+
+    private async Task RunMigrationAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            var result = await _migrationService.ApplyAsync(ConfigFilePath, MigrationPlan.ToList());
+            _lastMigrationResult = result;
+
+            // Keep the removed keys out of the profile too, or the next save
+            // would write them straight back into the cleaned file.
+            foreach (var entry in MigrationPlan)
+                _profile.Settings.Remove(entry.LegacyKey);
+            await _serversJsonService.UpdateServerAsync(_profile);
+
+            _configWatcher?.MarkSynced();
+            _lastSyncedHash = ConfigFileSnapshot.Compute(ConfigFilePath);
+            MigrationPlan.Clear();
+            OnPropertyChanged(nameof(ShowMigrationPanel));
+            OnPropertyChanged(nameof(CanRollbackMigration));
+            RollbackMigrationCommand.NotifyCanExecuteChanged();
+
+            SetStatus($"Migration complete — {result.RemovedKeyCount} legacy properties removed. " +
+                      $"Backup: {Path.GetFileName(result.BackupPath)} · Report: {Path.GetFileName(result.ReportPath)}",
+                error: false);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Migration failed: {ex.Message}", error: true);
+        }
+        finally
+        {
+            IsBusy = false;
+            RunMigrationCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private async Task RollbackMigrationAsync()
+    {
+        if (_lastMigrationResult == null) return;
+        IsBusy = true;
+        try
+        {
+            _migrationService.Rollback(_lastMigrationResult, ConfigFilePath);
+            _lastMigrationResult = null;
+            await _configService.LoadAsync(_profile, ConfigFilePath);
+            RefreshItemsFromProfile();
+            _configWatcher?.MarkSynced();
+            _lastSyncedHash = ConfigFileSnapshot.Compute(ConfigFilePath);
+            await RefreshDriftAndMigrationAsync();
+            OnPropertyChanged(nameof(CanRollbackMigration));
+            SetStatus("Migration rolled back — the original configuration was restored.", error: false);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Rollback failed: {ex.Message}", error: true);
+        }
+        finally
+        {
+            IsBusy = false;
+            RollbackMigrationCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    // ── Sandbox helpers ───────────────────────────────────────────────────────
+
+    private void UpdateSandboxDecodeState()
+    {
+        var code = SandboxCodeItem?.Value?.Trim() ?? string.Empty;
+        CopySandboxCodeCommand.NotifyCanExecuteChanged();
+
+        if (code.Length == 0)
+        {
+            SandboxDecodeStatus = "No sandbox code set — the server will use default V3 gameplay settings.";
+            return;
+        }
+
+        var codec = _codecRegistry.ResolveForCode(code);
+        if (codec != null && codec.TryDecode(code, out var decoded, out _))
+        {
+            ShowDecodedOptions(decoded, $"Decoded by {codec.CodecId} (verified against {codec.VerifiedAgainst}).");
+            return;
+        }
+
+        // No verified decoder: rule 1 — never guess, never touch the stored code.
+        SandboxDecodeStatus = "No verified decoder is available for this game build — the code is stored " +
+                              "and applied exactly as entered. Run 'getsandboxoptions' (gso) in the server " +
+                              "console and paste the output below to view the decoded settings.";
+    }
+
+    private void ImportGso()
+    {
+        if (!GetSandboxOptionsParser.TryParse(GsoImportText, out var settings, out var error))
+        {
+            SetStatus($"gso import failed: {error}", error: true);
+            return;
+        }
+
+        settings.GameVersion = _installInfo?.GameVersion;
+        _lastGsoImport = settings;
+        SetGsoBaselineCommand.NotifyCanExecuteChanged();
+        ShowDecodedOptions(settings, $"{settings.Count} options imported from gso output.");
+
+        GsoDiffs.Clear();
+        if (_gsoBaseline != null)
+        {
+            foreach (var diff in SandboxComparer.Compare(_gsoBaseline, settings))
+                GsoDiffs.Add(diff);
+        }
+        OnPropertyChanged(nameof(HasGsoDiffs));
+        SetStatus($"Imported {settings.Count} sandbox options from console output.", error: false);
+    }
+
+    private void SetGsoBaseline()
+    {
+        if (_lastGsoImport == null) return;
+        _gsoBaseline = _lastGsoImport.Clone();
+        GsoDiffs.Clear();
+        OnPropertyChanged(nameof(HasGsoDiffs));
+        SetStatus("Baseline captured — the next gso import will show what changed.", error: false);
+    }
+
+    private void ShowDecodedOptions(SandboxSettings settings, string statusText)
+    {
+        var schema = SandboxSchema.BuiltIn;
+        DecodedOptions.Clear();
+        foreach (var (key, value) in settings.Values)
+        {
+            var def = schema.Find(key);
+            DecodedOptions.Add(new SandboxOptionRow(
+                key,
+                def?.DisplayName ?? key,
+                def?.Category ?? "Other",
+                value));
+        }
+
+        OnPropertyChanged(nameof(HasDecodedOptions));
+        SandboxDecodeStatus = statusText;
+    }
+
+    // ── Presets ───────────────────────────────────────────────────────────────
+
+    private async Task RefreshPresetsAsync()
+    {
+        var presets = await _presetStore.LoadAsync();
+        Presets.Clear();
+        foreach (var preset in presets)
+            Presets.Add(preset);
+    }
+
+    private void ApplyPreset(SandboxPreset? preset)
+    {
+        if (preset == null) return;
+        if (!preset.HasCode)
+        {
+            SetStatus($"'{preset.Name}' has no captured code yet — generate it in the game menu " +
+                      "on your installed build, then save it here as a preset.", error: true);
+            return;
+        }
+
+        if (SandboxCodeItem != null)
+            SandboxCodeItem.Value = preset.Code;
+
+        var buildNote = string.IsNullOrEmpty(preset.CapturedOnBuild)
+            ? string.Empty
+            : $" (captured on {preset.CapturedOnBuild})";
+        SetStatus($"Preset '{preset.Name}' applied{buildNote} — review and save.", error: false);
+    }
+
+    private async Task SaveCurrentAsPresetAsync()
+    {
+        var code = SandboxCodeItem?.Value?.Trim();
+        if (string.IsNullOrEmpty(code)) return;
+
+        try
+        {
+            var build = _installInfo?.GameVersion != null
+                ? $"{_installInfo.GameVersion}" + (_installInfo.GameBuild != null ? $" (b{_installInfo.GameBuild})" : "")
+                : null;
+            await _presetStore.SaveAsync(new SandboxPreset
+            {
+                Name = NewPresetName.Trim(),
+                Description = "Captured from this server's configuration.",
+                Code = code,
+                CapturedOnBuild = build
+            });
+            NewPresetName = string.Empty;
+            await RefreshPresetsAsync();
+            SetStatus("Preset saved.", error: false);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Could not save preset: {ex.Message}", error: true);
+        }
+    }
+
+    private async Task DeletePresetAsync(SandboxPreset? preset)
+    {
+        preset ??= SelectedPreset;
+        if (preset == null || (preset.IsOfficial && !preset.HasCode)) return;
+
+        try
+        {
+            await _presetStore.DeleteAsync(preset.Name);
+            await RefreshPresetsAsync();
+            SetStatus($"Preset '{preset.Name}' deleted.", error: false);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Could not delete preset: {ex.Message}", error: true);
+        }
+    }
+
     // ── Save ──────────────────────────────────────────────────────────────────
 
     private async Task SaveAsync()
@@ -451,6 +845,18 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel, IDisposable
 
         try
         {
+            // Concurrent-modification guard: never overwrite edits made outside
+            // the app since our last load/save. The banner offers Reload / Keep.
+            if (File.Exists(ConfigFilePath) &&
+                ConfigFileSnapshot.HasDrifted(_lastSyncedHash, ConfigFilePath))
+            {
+                HasExternalChanges = true;
+                SetStatus("Save blocked: serverconfig.xml was changed outside the app. " +
+                          "Reload from file to pick up those edits, or choose 'Keep My Changes' to overwrite them.",
+                    error: true);
+                return;
+            }
+
             // Apply current item values to profile.Settings
             ApplyItemsToProfile();
 
@@ -463,6 +869,7 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel, IDisposable
 
             // Re-baseline so this write isn't reported back to us as external drift.
             _configWatcher?.MarkSynced();
+            _lastSyncedHash = ConfigFileSnapshot.Compute(ConfigFilePath);
             HasExternalChanges = false;
 
             LastSavedAt = DateTime.Now;
@@ -507,7 +914,9 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel, IDisposable
             await _configService.LoadAsync(_profile, ConfigFilePath);
             RefreshItemsFromProfile();
             _configWatcher?.MarkSynced();
+            _lastSyncedHash = ConfigFileSnapshot.Compute(ConfigFilePath);
             HasExternalChanges = false;
+            await RefreshDriftAndMigrationAsync();
             SetStatus("Reloaded from serverconfig.xml.", error: false);
             RunValidation();
         }
@@ -614,6 +1023,8 @@ public sealed class SevenDaysToDieSettingsViewModel : BaseViewModel, IDisposable
         OnPropertyChanged(nameof(CrossplayNetworkOk));
         OnPropertyChanged(nameof(AllCrossplayChecksPass));
         OnPropertyChanged(nameof(CrossplayChecks));
+
+        UpdateSandboxDecodeState();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

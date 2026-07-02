@@ -1,5 +1,19 @@
 # Release Notes
 
+## v4.1.0
+
+### Added — 7 Days to Die V3.0 management upgrade
+- **Installed-version detection** — the settings page now shows the actual installed game version, build, and Steam branch, read from the server's own boot logs and Steam manifest (`appmanifest_294420.acf`) instead of assuming anything. Configs are classified as V2.x or V3.0 from their real shape (SandboxCode vs legacy gameplay properties).
+- **Configuration drift analysis** — the active `serverconfig.xml` is compared against the app's schema. Properties the app doesn't know (added by newer game versions or mods) are no longer invisible: they appear in a new **Unrecognized** category with a generic editor and an "UNRECOGNIZED" badge, and are preserved byte-for-byte on save. Retired/legacy properties are reported separately instead of being lumped in.
+- **V2 → V3 Migration Assistant** — when legacy V2 gameplay properties (which abort a V3 server's startup) are found in the config, a migration panel lists every one with its old value, the matching V3 sandbox option, and an EXACT / APPROX / UNSUPPORTED classification — approximate matches carry your old value verbatim, never silently rounded. One click backs up the file, removes the legacy properties, and writes a JSON migration report next to the backup; **Undo Migration** restores the original byte-for-byte.
+- **Sandbox Code panel upgrade** — Copy/Paste code buttons; a preset library (all 17 official V3 preset names as placeholders — codes are only stored once captured from your installed build, never hardcoded — plus custom presets you can save, apply, and delete); a decoded settings viewer fed by pasting the server's own `getsandboxoptions` (gso) console output; and a comparison baseline so a second gso import shows exactly which options changed. The code itself is still stored and applied exactly as entered — the game's encoding is proprietary, and the new codec architecture (`ISandboxCodec`) only decodes through implementations verified against a real build (none ship yet; the pipeline is proven by tests).
+- **Versioned sandbox schema** — a built-in catalog of all 150 V3.0 sandbox options across the 8 official categories (Player, Entity, World, Resources, Crafting, Traders, Tasks, Miscellaneous), deliberately shipping names/categories only — allowed values and defaults are never invented, they come from a schema override file or gso capture.
+
+### Fixed
+- **Save can no longer overwrite external edits** — saving 7DtD settings now re-checks `serverconfig.xml` on disk first; if something else changed it since the app loaded it, the save is blocked with a conflict banner (Reload from File / Keep My Changes) instead of silently clobbering the newer file.
+
+---
+
 ## v4.0.15
 
 ### Fixed

@@ -106,6 +106,13 @@ Test7DaysToDieCrossplayValidation();
 Test7DaysToDieWebDashboardSettings();
 await Test7DaysToDieXmlPreservesUnknownPropertiesAsync();
 Test7DaysToDieSandboxCodeRoundTrip();
+await Test7DaysToDieVersionDetectionAsync();
+await Test7DaysToDieConfigDriftAsync();
+Test7DaysToDieSandboxSchema();
+Test7DaysToDieSandboxCodecContract();
+Test7DaysToDieGsoParser();
+await Test7DaysToDieSandboxPresetsAsync();
+await Test7DaysToDieMigrationAsync();
 TestGameArtworkMapping();
 TestConfigFileSnapshotDrift();
 await TestBackupRestoreSafetyAsync();
@@ -1937,5 +1944,412 @@ static async Task TestServerInstallServiceValidationAsync()
     finally
     {
         DeleteTempRoot(tempRoot);
+    }
+}
+
+// ── 7 Days to Die V3 upgrade tests ────────────────────────────────────────────
+
+static async Task Test7DaysToDieVersionDetectionAsync()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        // Synthetic install: Steam manifest on the experimental branch + boot log.
+        Directory.CreateDirectory(Path.Combine(tempRoot, "steamapps"));
+        await File.WriteAllTextAsync(Path.Combine(tempRoot, "steamapps", "appmanifest_294420.acf"),
+            "\"AppState\"\n{\n\t\"appid\"\t\"294420\"\n\t\"buildid\"\t\"14732881\"\n" +
+            "\t\"UserConfig\"\n\t{\n\t\t\"betakey\"\t\"latest_experimental\"\n\t}\n}\n");
+        Directory.CreateDirectory(Path.Combine(tempRoot, "logs"));
+        await File.WriteAllTextAsync(Path.Combine(tempRoot, "logs", "server_20260701_120000.log"),
+            "2026-07-01T12:00:00 0.019 INF Version: V 3.0.0 (b259) Compatibility Version: V 3.0\n" +
+            "2026-07-01T12:00:01 0.020 INF System information:\n");
+
+        var info = await new SevenDaysToDieVersionService().DetectAsync(tempRoot);
+        Assert(info.ManifestFound, "Version detection must find the Steam manifest.");
+        Assert(info.BuildId == "14732881", "Build id must be parsed from the manifest.");
+        Assert(info.Branch == "latest_experimental", "Branch must come from the manifest betakey.");
+        Assert(info.GameVersion == "3.0.0", "Game version must be parsed from the boot log.");
+        Assert(info.GameBuild == "259", "Game build must be parsed from the boot log.");
+        Assert(info.Generation == SevenDaysGeneration.V3, "Version 3.x must classify as V3.");
+        Assert(info.VersionSource == "server log", "The log must win as the version source.");
+        Assert(info.Summary.Contains("V3.0.0"), "Summary must include the game version.");
+        Assert(info.Summary.Contains("latest_experimental"), "Summary must show a non-stable branch.");
+
+        // No manifest, no logs: everything unknown, never throws.
+        var emptyRoot = Path.Combine(tempRoot, "empty");
+        Directory.CreateDirectory(emptyRoot);
+        var empty = await new SevenDaysToDieVersionService().DetectAsync(emptyRoot);
+        Assert(!empty.ManifestFound && empty.BuildId == null, "Empty install must report nothing found.");
+        Assert(empty.Generation == SevenDaysGeneration.Unknown, "Empty install generation must be Unknown.");
+
+        // Config-shape fallback when no logs exist: SandboxCode = V3, legacy = V2.
+        Assert(SevenDaysToDieVersionService.ClassifyGeneration(new[] { "ServerName", "SandboxCode" })
+            == SevenDaysGeneration.V3, "SandboxCode property must classify as V3.");
+        Assert(SevenDaysToDieVersionService.ClassifyGeneration(new[] { "ServerName", "GameDifficulty" })
+            == SevenDaysGeneration.V2, "Legacy gameplay property must classify as V2.");
+        Assert(SevenDaysToDieVersionService.ClassifyGeneration(new[] { "ServerName" })
+            == SevenDaysGeneration.Unknown, "Neither marker must classify as Unknown.");
+
+        Console.WriteLine("[PASS] 7DtD version detection");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
+}
+
+static async Task Test7DaysToDieConfigDriftAsync()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var configPath = Path.Combine(tempRoot, "serverconfig.xml");
+        var doc = ServerConfigXmlDocument.CreateDefault();
+        doc.SetValue("ServerName", "Drift Test");
+        doc.SetValue("EACEnabled", "true");
+        doc.SetValue("SomeFutureV31Property", "42");   // unknown to schema — must be surfaced
+        doc.SetValue("GameDifficulty", "3");            // legacy V2 — must go to migration
+        doc.SetValue("ControlPanelEnabled", "true");    // retired — stripped on next save
+        await doc.SaveAtomicAsync(configPath, createBackup: false);
+
+        GameProviderRegistry.CreateDefault().TryGetProvider("seven_days_to_die", out var provider);
+        var schemaKeys = provider!.SettingsDefinitions.Select(d => d.SettingKey);
+        var report = await new SevenDaysToDieConfigDriftService().AnalyzeAsync(configPath, schemaKeys);
+
+        Assert(report.ConfigFileExists, "Drift report must see the config file.");
+        Assert(report.HasDrift, "Report must flag drift.");
+        Assert(report.UnknownProperties.Any(p => p.Name == "SomeFutureV31Property" && p.Value == "42"),
+            "Unknown property must be reported with its value.");
+        Assert(report.UnknownProperties.All(p => p.Name != "GameDifficulty"),
+            "Legacy keys must not be double-reported as unknown.");
+        Assert(report.LegacyProperties.Any(p => p.Name == "GameDifficulty"),
+            "Legacy V2 property must be categorized as legacy.");
+        Assert(report.RetiredProperties.Any(p => p.Name == "ControlPanelEnabled"),
+            "Retired property must be categorized as retired.");
+        Assert(report.MissingFromFile.Contains("GameWorld"),
+            "Schema keys absent from the file must be reported as missing.");
+        Assert(report.Generation == SevenDaysGeneration.V2,
+            "Config with legacy keys and no SandboxCode must classify as V2.");
+        Assert(!report.HasSandboxCode, "No SandboxCode present.");
+
+        // A clean, fully known config reports no drift.
+        var cleanPath = Path.Combine(tempRoot, "clean.xml");
+        var clean = ServerConfigXmlDocument.CreateDefault();
+        clean.SetValue("ServerName", "Clean");
+        clean.SetValue("EACEnabled", "true");
+        clean.SetValue("SandboxCode", "OPAQUE-CODE");
+        await clean.SaveAtomicAsync(cleanPath, createBackup: false);
+        var cleanReport = await new SevenDaysToDieConfigDriftService().AnalyzeAsync(cleanPath, schemaKeys);
+        Assert(!cleanReport.HasDrift, "Fully known config must report no drift.");
+        Assert(cleanReport.Generation == SevenDaysGeneration.V3, "SandboxCode config must classify as V3.");
+        Assert(cleanReport.HasSandboxCode, "SandboxCode presence must be reported.");
+
+        // Missing file: safe empty report.
+        var noFile = await new SevenDaysToDieConfigDriftService()
+            .AnalyzeAsync(Path.Combine(tempRoot, "nope.xml"), schemaKeys);
+        Assert(!noFile.ConfigFileExists && !noFile.HasDrift, "Missing file must report cleanly.");
+
+        Console.WriteLine("[PASS] 7DtD config drift analysis");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
+}
+
+static void Test7DaysToDieSandboxSchema()
+{
+    var schema = SandboxSchema.BuiltIn;
+    Assert(schema.Options.Count >= 140, $"Built-in schema must cover the full V3 catalog (has {schema.Options.Count}).");
+    Assert(schema.Categories.Count() == 8, "Schema must have the 8 V3 categories.");
+
+    string[] expectedCategories = ["Player", "Entity", "World", "Resources", "Crafting", "Traders", "Tasks", "Miscellaneous"];
+    foreach (var cat in expectedCategories)
+        Assert(schema.Options.Any(o => o.Category == cat), $"Schema must contain category '{cat}'.");
+
+    // Spot-check options and display names.
+    Assert(schema.Find("BloodMoonFrequency") != null, "BloodMoonFrequency must be in the schema.");
+    Assert(schema.Find("bloodmoonfrequency") != null, "Schema lookup must be case-insensitive.");
+    Assert(schema.Find("BloodMoonFrequency")!.DisplayName == "Blood Moon Frequency", "Display name must be humanized.");
+    Assert(schema.Find("XPMultiplier")!.DisplayName == "XP Multiplier", "XP acronym must stay intact.");
+    Assert(schema.Find("TwentyFourHourCycle")!.DisplayName == "24-Hour Day Cycle", "24-hour cycle display name.");
+    Assert(schema.Find("ZombiesEatAnimals")!.Category == "Entity", "ZombiesEatAnimals belongs to Entity.");
+    Assert(schema.Find("DewCollectorYield")!.Category == "Crafting", "DewCollectorYield belongs to Crafting.");
+    Assert(schema.Find("NotARealOption") == null, "Unknown keys must return null.");
+
+    // The built-in schema must NOT invent allowed values or defaults — those
+    // require verification against a live build (schema override or gso).
+    Assert(schema.Options.All(o => o.AllowedValues == null && o.DefaultValue == null),
+        "Built-in schema must not ship unverified allowed values or defaults.");
+
+    Console.WriteLine("[PASS] 7DtD sandbox schema");
+}
+
+static void Test7DaysToDieSandboxCodecContract()
+{
+    // The default registry must ship EMPTY: the game's encoding is proprietary
+    // and unverified, and guessing it would corrupt live servers.
+    var registry = SandboxCodecRegistry.CreateDefault();
+    Assert(registry.Codecs.Count == 0, "Default codec registry must ship without game codecs.");
+    Assert(registry.ResolveForCode("AAAJABJACJADJARFBNC") == null,
+        "A real (opaque) game code must not resolve to any codec.");
+    Assert(registry.ResolveForCode("") == null, "Empty code must resolve to nothing.");
+
+    // The codec pipeline itself, proven with the test codec: decode, encode,
+    // decode must be lossless (round-trip equivalence).
+    registry.Register(new TestSandboxCodec());
+    var code = "TEST1:XPMultiplier=200;ZombieDaySpeed=Jog;LootAbundance=150";
+    var codec = registry.ResolveForCode(code);
+    Assert(codec != null, "Registered codec must resolve for its own format.");
+
+    Assert(codec!.TryDecode(code, out var decoded, out var decodeError), $"Decode failed: {decodeError}");
+    Assert(decoded.Count == 3, "All options must decode.");
+    Assert(decoded.Values["XPMultiplier"] == "200", "Decoded value must match.");
+
+    Assert(codec.TryEncode(decoded, out var reEncoded, out var encodeError), $"Encode failed: {encodeError}");
+    Assert(codec.TryDecode(reEncoded, out var decodedAgain, out _), "Re-encoded code must decode.");
+    Assert(SandboxComparer.Compare(decoded, decodedAgain).Count == 0,
+        "Round-trip must be lossless (decode, encode, decode).");
+
+    // Malformed codes must be rejected with a useful error, not partial output.
+    Assert(!codec.TryDecode("TEST1:not-a-valid-payload;;;=", out var bad, out var badError),
+        "Malformed code must be rejected.");
+    Assert(bad.Count == 0, "Rejected decode must not return partial settings.");
+    Assert(!string.IsNullOrWhiteSpace(badError), "Rejected decode must carry an error message.");
+
+    // Comparison: differing, one-sided, and identical values.
+    var a = new SandboxSettings();
+    a.Values["XPMultiplier"] = "100";
+    a.Values["OnlyInA"] = "1";
+    a.Values["Same"] = "x";
+    var b = new SandboxSettings();
+    b.Values["XPMultiplier"] = "200";
+    b.Values["OnlyInB"] = "2";
+    b.Values["Same"] = "x";
+    var diffs = SandboxComparer.Compare(a, b);
+    Assert(diffs.Count == 3, "Compare must report changed + one-sided options only.");
+    Assert(diffs.Any(d => d.Option == "XPMultiplier" && d.ValueA == "100" && d.ValueB == "200"),
+        "Changed value must show both sides.");
+    Assert(diffs.Any(d => d.Option == "OnlyInA" && d.ValueB == null), "A-only option must show null on B side.");
+    Assert(diffs.All(d => d.Option != "Same"), "Identical values must not be reported.");
+
+    Console.WriteLine("[PASS] 7DtD sandbox codec contract");
+}
+
+static void Test7DaysToDieGsoParser()
+{
+    // Tolerant of the console formats builds actually print, plus log noise.
+    var output = string.Join('\n',
+        "2026-07-01T12:00:00 125.3 INF Executing command 'getsandboxoptions'",
+        "GameOption XPMultiplier = 200",
+        "ZombieDaySpeed: Jog",
+        "LootAbundance = 150",
+        "BloodMoonFrequency=7",
+        "",
+        "Total of 4 options");
+
+    Assert(GetSandboxOptionsParser.TryParse(output, out var settings, out var error), $"gso parse failed: {error}");
+    Assert(settings.Values["XPMultiplier"] == "200", "'GameOption X = Y' form must parse.");
+    Assert(settings.Values["ZombieDaySpeed"] == "Jog", "'X: Y' form must parse.");
+    Assert(settings.Values["BloodMoonFrequency"] == "7", "'X=Y' form must parse.");
+    Assert(settings.Source == "gso", "Source must be tagged gso.");
+    Assert(!settings.Values.ContainsKey("Executing"), "Command echo noise must be ignored.");
+
+    Assert(!GetSandboxOptionsParser.TryParse("", out _, out var emptyError) && emptyError != null,
+        "Empty input must be rejected with an error.");
+    Assert(!GetSandboxOptionsParser.TryParse("no options here!", out _, out var noneError) && noneError != null,
+        "Output without options must be rejected with an error.");
+
+    Console.WriteLine("[PASS] 7DtD gso parser");
+}
+
+static async Task Test7DaysToDieSandboxPresetsAsync()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var store = new SandboxPresetStore(tempRoot);
+
+        // Official presets appear as placeholders (no code) out of the box.
+        var initial = await store.LoadAsync();
+        Assert(initial.Count == 17, $"All 17 official presets must be listed (got {initial.Count}).");
+        Assert(initial.All(p => p.IsOfficial && !p.HasCode),
+            "Official presets must ship WITHOUT hardcoded codes — codes must be captured per build.");
+        Assert(initial.Any(p => p.Name == "Undead Matinee"), "V3 official preset names must be present.");
+
+        // Save a custom preset, reload from a fresh store instance.
+        await store.SaveAsync(new SandboxPreset
+        {
+            Name = "My PvP Rules",
+            Description = "Weekend server",
+            Code = "OPAQUE-GAME-CODE-1",
+            CapturedOnBuild = "3.0.0 (b259)"
+        });
+        var reloaded = await new SandboxPresetStore(tempRoot).LoadAsync();
+        Assert(reloaded.Count == 18, "Custom preset must persist alongside officials.");
+        var mine = reloaded.First(p => p.Name == "My PvP Rules");
+        Assert(mine.Code == "OPAQUE-GAME-CODE-1" && !mine.IsOfficial, "Custom preset round-trip.");
+
+        // Capturing a code for an official preset keeps its official flag.
+        await store.SaveAsync(new SandboxPreset { Name = "Warrior", Code = "CAPTURED-WARRIOR-CODE" });
+        var warrior = (await store.LoadAsync()).First(p => p.Name == "Warrior");
+        Assert(warrior.IsOfficial && warrior.HasCode, "Captured official preset keeps IsOfficial.");
+
+        // Clone.
+        var clone = await store.CloneAsync("My PvP Rules", "My PvE Rules");
+        Assert(clone.Code == "OPAQUE-GAME-CODE-1" && !clone.IsOfficial, "Clone must copy the code as custom.");
+        Assert((await store.LoadAsync()).Any(p => p.Name == "My PvE Rules"), "Clone must persist.");
+
+        // Delete custom works; official placeholders are indelible.
+        await store.DeleteAsync("My PvP Rules");
+        var afterDelete = await store.LoadAsync();
+        Assert(afterDelete.All(p => p.Name != "My PvP Rules"), "Deleted custom preset must be gone.");
+        await store.DeleteAsync("Nomad"); // placeholder without code
+        Assert((await store.LoadAsync()).Any(p => p.Name == "Nomad"),
+            "Official placeholder must survive deletion attempts.");
+
+        Console.WriteLine("[PASS] 7DtD sandbox presets");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
+}
+
+static async Task Test7DaysToDieMigrationAsync()
+{
+    var tempRoot = CreateTempRoot();
+    try
+    {
+        var configPath = Path.Combine(tempRoot, "serverconfig.xml");
+        var doc = ServerConfigXmlDocument.CreateDefault();
+        doc.SetValue("ServerName", "Migration Test");
+        doc.SetValue("ServerPort", "26900");
+        doc.SetValue("XPMultiplier", "150");        // Exact (same name)
+        doc.SetValue("BlockDamagePlayer", "200");    // Exact (renamed)
+        doc.SetValue("DayNightLength", "90");        // Approximate
+        doc.SetValue("GameDifficulty", "3");         // Unsupported
+        await doc.SaveAtomicAsync(configPath, createBackup: false);
+        var originalXml = await File.ReadAllTextAsync(configPath);
+
+        var svc = new SevenDaysToDieMigrationService();
+
+        // Mapping table must cover the legacy keys the config service knows.
+        var mapped = SevenDaysToDieMigrationService.Mappings.Select(m => m.LegacyKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var legacyKey in new[] { "GameDifficulty", "ZombieMove", "AirDropFrequency", "QuestProgressionDailyLimit" })
+            Assert(mapped.Contains(legacyKey), $"Mapping table must cover {legacyKey}.");
+
+        // Plan classification.
+        var plan = await svc.BuildPlanAsync(configPath);
+        Assert(plan.Count == 4, $"Plan must contain exactly the legacy keys present (got {plan.Count}).");
+        var xp = plan.First(e => e.LegacyKey == "XPMultiplier");
+        Assert(xp.Kind == MigrationKind.Exact && xp.TargetOption == "XPMultiplier" && xp.ProposedValue == "150",
+            "Same-name option must map exactly with the value carried over.");
+        var block = plan.First(e => e.LegacyKey == "BlockDamagePlayer");
+        Assert(block.Kind == MigrationKind.Exact && block.TargetOption == "BlockDamage",
+            "Renamed option must map exactly to the new name.");
+        var day = plan.First(e => e.LegacyKey == "DayNightLength");
+        Assert(day.Kind == MigrationKind.Approximate && day.ProposedValue == "90",
+            "Approximate mapping must carry the old value verbatim — never silently rounded.");
+        var diff = plan.First(e => e.LegacyKey == "GameDifficulty");
+        Assert(diff.Kind == MigrationKind.Unsupported && diff.TargetOption == null && diff.ProposedValue == null,
+            "Unsupported values must be flagged, not converted.");
+
+        // Every mapped target must exist in the sandbox schema.
+        foreach (var entry in plan.Where(e => e.TargetOption != null))
+            Assert(SandboxSchema.BuiltIn.Find(entry.TargetOption!) != null,
+                $"Migration target '{entry.TargetOption}' must exist in the sandbox schema.");
+
+        // ToSandboxSettings: only supported entries carry over.
+        var sandbox = SevenDaysToDieMigrationService.ToSandboxSettings(plan);
+        Assert(sandbox.Count == 3 && sandbox.Values["BlockDamage"] == "200",
+            "Decoded migration output must contain supported entries only.");
+
+        // Apply: legacy keys removed, everything else preserved, backup + report written.
+        var result = await svc.ApplyAsync(configPath, plan);
+        var migrated = await ServerConfigXmlDocument.LoadAsync(configPath);
+        Assert(migrated.GetValue("XPMultiplier") == null, "Legacy keys must be removed from the file.");
+        Assert(migrated.GetValue("GameDifficulty") == null, "Unsupported legacy keys must also be removed.");
+        Assert(migrated.GetValue("ServerName") == "Migration Test", "Non-legacy properties must be preserved.");
+        Assert(migrated.GetValue("ServerPort") == "26900", "Non-legacy properties must be preserved.");
+        Assert(File.Exists(result.BackupPath), "Pre-migration backup must exist.");
+        Assert(await File.ReadAllTextAsync(result.BackupPath) == originalXml,
+            "Backup must be byte-identical to the original.");
+        Assert(File.Exists(result.ReportPath), "Migration report must be written.");
+        var report = await File.ReadAllTextAsync(result.ReportPath);
+        Assert(report.Contains("BlockDamagePlayer") && report.Contains("BlockDamage"),
+            "Report must record old key and proposed target.");
+        Assert(result.RemovedKeyCount == 4, "Result must count removed keys.");
+
+        // Rollback restores the original byte-for-byte.
+        svc.Rollback(result, configPath);
+        Assert(await File.ReadAllTextAsync(configPath) == originalXml, "Rollback must restore the original file.");
+
+        // Empty plan: refuse to run rather than pretend success.
+        var emptyPath = Path.Combine(tempRoot, "no-legacy.xml");
+        var cleanDoc = ServerConfigXmlDocument.CreateDefault();
+        cleanDoc.SetValue("ServerName", "Clean");
+        await cleanDoc.SaveAtomicAsync(emptyPath, createBackup: false);
+        Assert((await svc.BuildPlanAsync(emptyPath)).Count == 0, "Clean config must produce an empty plan.");
+        var threw = false;
+        try { await svc.ApplyAsync(emptyPath, new List<MigrationPlanEntry>()); }
+        catch (InvalidOperationException) { threw = true; }
+        Assert(threw, "Applying an empty plan must throw, not fake success.");
+
+        Console.WriteLine("[PASS] 7DtD V2->V3 migration");
+    }
+    finally
+    {
+        DeleteTempRoot(tempRoot);
+    }
+}
+
+// Test-only codec proving the ISandboxCodec pipeline (decode, edit, encode)
+// without pretending to know the game's proprietary encoding.
+sealed class TestSandboxCodec : ISandboxCodec
+{
+    public string CodecId => "test-v1";
+    public string VerifiedAgainst => "test fixtures only";
+
+    public bool CanHandle(string code) => code.StartsWith("TEST1:", StringComparison.Ordinal);
+
+    public bool TryDecode(string code, out SandboxSettings settings, out string? error)
+    {
+        settings = new SandboxSettings { Source = $"codec:{CodecId}" };
+        error = null;
+        if (!CanHandle(code))
+        {
+            error = "Not a TEST1 code.";
+            return false;
+        }
+
+        var parsed = new SandboxSettings { Source = $"codec:{CodecId}" };
+        foreach (var pair in code["TEST1:".Length..].Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var idx = pair.IndexOf('=');
+            if (idx <= 0 || idx == pair.Length - 1)
+            {
+                error = $"Malformed option pair '{pair}'.";
+                return false; // all-or-nothing: no partial results
+            }
+            parsed.Values[pair[..idx]] = pair[(idx + 1)..];
+        }
+
+        if (parsed.Count == 0)
+        {
+            error = "Code contains no options.";
+            return false;
+        }
+
+        settings = parsed;
+        return true;
+    }
+
+    public bool TryEncode(SandboxSettings settings, out string code, out string? error)
+    {
+        code = "TEST1:" + string.Join(';', settings.Values.Select(kv => $"{kv.Key}={kv.Value}"));
+        error = null;
+        return true;
     }
 }
